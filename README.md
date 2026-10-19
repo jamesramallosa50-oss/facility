@@ -1,15 +1,7 @@
-# The Facility — Standalone Edition
+# THE FACILITY — Survival Horror
 
-The Facility horror mode has been separated into a dedicated, launchable project.
+Open `index.html` through a local static web server, or deploy this folder unchanged to a static host.
 
-## Play
-Open `index.html` in a browser, or host this folder using any static-site server (recommended, since WebGL, audio and imported models may require HTTP).
+The main menu **ENTER FACILITY** starts the three-level research facility directly. There is no game-mode selection step. Find three fuses and restore power to the freight lift while avoiding the creature.
 
-For local hosting, run `python -m http.server 8000` inside this folder and visit `http://localhost:8000`.
-
-Use **PLAY THE FACILITY** → **ENTER THE FACILITY**. Your goal: find three fuses, restore power to the freight lift, and escape.
-
-## Technical note
-The Facility originally lived inside Gloomspire's single 3 MB HTML file. Its renderer, input, audio, horror mode and common game state depend on shared in-file routines. This standalone edition keeps that engine intact for compatibility but exposes **only The Facility** in the main menu. The original Gloomspire archive is not modified.
-
-Requires internet access for any remote resources referenced by the HTML.
+A local static server is recommended because the game loads the demon GLB and audio from `assets/horror/`. For example: `python -m http.server 8000` then visit `http://localhost:8000/The-Facility/` from the parent folder.
