@@ -20,22 +20,34 @@
     });
     return box;
   }
+  function alignFeet(actor){
+    if(!asset||!asset.feet.length)return;
+    actor.visual.updateWorldMatrix(true,true);let lowest=Infinity;
+    for(const foot of asset.feet){foot.getWorldPosition(asset.tmp);actor.visual.worldToLocal(asset.tmp);lowest=Math.min(lowest,asset.tmp.y);}
+    if(Number.isFinite(lowest))asset.visual.position.y+=asset.sole-lowest;
+    actor.visual.updateMatrixWorld(true);
+  }
   function prepare(gl,anisotropy){
     if(!gl||!gl.scene)throw new Error('Spider model has no scene');
     const root=gl.scene,walk=gl.animations.find(a=>/Spider walking$/i.test(a.name)),run=gl.animations.find(a=>/Spider running$/i.test(a.name));
     if(!walk||!run)throw new Error('Spider walking/running animation is missing');
-    const mixer=new T.AnimationMixer(root),bounds=new T.Box3();
+    const mixer=new T.AnimationMixer(root),bounds=new T.Box3(),feet=[],tmp=new T.Vector3();let sole=0;
+    root.traverse(o=>{if(o.isBone&&/LegSegmentF.*_end_/i.test(o.name))feet.push(o);});
     // Skinned rest bounds in this export are upright and are unsuitable for
     // scaling a walking spider. Measure the actual deformed walking poses.
     for(const clip of [walk,run]){
       mixer.stopAllAction();const action=mixer.clipAction(clip);action.reset().play();
-      for(let i=0;i<8;i++){mixer.setTime(clip.duration*i/8);bounds.union(poseBounds(root));}
+      for(let i=0;i<16;i++){
+        mixer.setTime(clip.duration*i/16);const pose=poseBounds(root);bounds.union(pose);
+        let footY=Infinity;for(const foot of feet){foot.getWorldPosition(tmp);footY=Math.min(footY,tmp.y);}
+        if(Number.isFinite(footY))sole=Math.max(sole,footY-pose.min.y);
+      }
     }
     mixer.stopAllAction();mixer.clipAction(walk).reset().play();mixer.setTime(0);root.updateMatrixWorld(true);
     const anchor=root.getObjectByName('Root_010'),center=anchor?anchor.getWorldPosition(new T.Vector3()):bounds.getCenter(new T.Vector3());
     const size=bounds.getSize(new T.Vector3()),span=Math.max(size.x,size.z);
     if(!(span>0&&Number.isFinite(span)))throw new Error('Spider has invalid geometry');
-    const scale=.92/span;
+    const scale=1.8/span;
     root.traverse(o=>{
       if(!o.isMesh)return;
       o.frustumCulled=false;o.castShadow=false;o.receiveShadow=false;
@@ -56,7 +68,7 @@
     const facing=new T.Group();facing.rotation.y=Math.PI;facing.add(offset);
     const visual=new T.Group();visual.name='Uploaded Wolf Spider';visual.scale.setScalar(scale);visual.position.y=.012;visual.add(facing);
     mixer.stopAllAction();mixer.uncacheRoot(root);
-    asset={root,visual,walk,run,scale,sourceBounds:bounds,span:.92,owner:null};
+    asset={root,visual,walk,run,scale,sourceBounds:bounds,span:1.8,width:size.x*scale,feet,tmp,sole:sole*scale+.012,owner:null};
     return asset;
   }
   async function load(progress,fetchBuffer,anisotropy){
@@ -77,21 +89,26 @@
     if(asset.owner)release(asset.owner);
     const visual=new T.Group();visual.add(asset.visual);
     const mixer=new T.AnimationMixer(asset.root),walk=mixer.clipAction(asset.walk),run=mixer.clipAction(asset.run);
-    const actor={visual,mixer,walk,run,runWeight:0,radius:.34,height:.58,eye:.32};asset.owner=actor;
+    const actor={visual,mixer,walk,run,runWeight:0,squeeze:1,radius:.42,height:.78,eye:.52};asset.owner=actor;
     reset(actor);return actor;
   }
   function reset(actor){
     actor.mixer.stopAllAction();actor.walk.reset().setEffectiveWeight(1).play();actor.run.reset().setEffectiveWeight(0).play();
-    actor.walk.paused=actor.run.paused=false;actor.runWeight=0;actor.mixer.update(0);
+    actor.walk.paused=actor.run.paused=false;actor.runWeight=0;actor.squeeze=1;actor.visual.scale.set(1,1,1);asset.visual.position.y=.012;actor.mixer.update(0);alignFeet(actor);
   }
-  function tick(actor,speed,dt){
+  function tick(actor,speed,dt,passageWidth){
     if(!actor||!Number.isFinite(dt)||dt<=0)return;
     speed=Number.isFinite(speed)?Math.max(0,speed):0;dt=Math.min(dt,.05);
+    // Full size in rooms; tuck the leg spread while crossing a real doorway.
+    // Only the actor parent changes, so the supplied rig and clips stay intact.
+    const width=Number.isFinite(passageWidth)?clamp(passageWidth/asset.width,.45,1):1;
+    actor.squeeze+=(width-actor.squeeze)*(1-Math.exp(-16*dt));actor.visual.scale.x=actor.squeeze;
+    const gait=.92/asset.span;
     const moving=speed>.08,target=clamp((speed-1.3)/1.7,0,1);
     actor.runWeight+=(target-actor.runWeight)*(1-Math.exp(-12*dt));
     actor.walk.setEffectiveWeight(1-actor.runWeight);actor.run.setEffectiveWeight(actor.runWeight);
-    actor.walk.setEffectiveTimeScale(clamp(.7+speed*.5,.5,2.4));actor.run.setEffectiveTimeScale(clamp(speed/2,.5,2.3));
-    actor.walk.paused=actor.run.paused=!moving;actor.mixer.update(dt);
+    actor.walk.setEffectiveTimeScale(clamp((.7+speed*.5)*gait,.3,2.4));actor.run.setEffectiveTimeScale(clamp(speed/2*gait,.3,2.3));
+    actor.walk.paused=actor.run.paused=!moving;actor.mixer.update(dt);alignFeet(actor);
   }
   function release(actor){
     if(!actor)return;actor.mixer.stopAllAction();
