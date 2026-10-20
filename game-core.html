@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>The Facility — East Wing</title>
-<meta name="facility-build" content="creatures-r2-20261020">
+<meta name="facility-build" content="spider-chase-r1-20261020">
 <meta name="theme-color" content="#060807">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="mobile-web-app-capable" content="yes">
@@ -16325,6 +16325,7 @@ function facHud(F){
   if(F.t>(F.tipUntil||0)){let t='';if(a){const k=isTouch?'USE · ':'E · ';if(a.t==='door')t=k+(a.d.lock?'LOCKED':Math.abs(a.d.th)<.6&&Math.abs(a.d.tgt)<.6?'OPEN':'CLOSE');else if(a.t==='fuse')t=k+'TAKE THE FUSE';else if(a.t==='bat')t=k+'TAKE THE BATTERY';else if(a.t==='brk')t=F.held>0?k+'PUT IN A FUSE':'BREAKER '+F.brk.n+' / 3';}
     const m=$('hztip');if(m){if(m.textContent!==t)m.textContent=t;const o=t?'1':'0';if(m.style.opacity!==o)m.style.opacity=o;}}
 }
+const FSP={chase:3.85,tired:2.9,fatigue:12,life:20,lost:3.5,reaction:.85,doorReaction:1.1};
 /* Native Facility encounters. One additional creature is active at a time;
    the main hunter gets priority during a chase. All timers use simulation time. */
 function facHauntInit(F){
@@ -16346,7 +16347,8 @@ function facHauntSpawn(F,kind,p,mode,door){
   const pos={x:p[0],y:p[1],z:p[2]},r=a.radius||.26,h=a.height||1.9;
   if(facPush(F,pos,r,h,a.spider?.28:.4)>.16||facPush(F,{...pos},r-.004,h,a.spider?.28:.4)>.002)return false;
   const ground=facGround(F,pos.x,pos.z,pos.y,.35);if(!Number.isFinite(ground)||Math.abs(ground-pos.y)>.35)return false;pos.y=ground;
-  Object.assign(a,{x:pos.x,y:pos.y,z:pos.z,age:0,mode,door:door||null,on:true,revealed:mode!=='door',path:null,pi:0,repath:0,seen:0,stung:false,doorAt:0,stuck:0,life:mode==='hunt'?6:mode==='watch'?5:2.4});
+  if(a.spider&&mode!=='door')mode='hunt';
+  Object.assign(a,{x:pos.x,y:pos.y,z:pos.z,age:0,mode,door:door||null,on:true,revealed:mode!=='door',path:null,pi:0,repath:0,lineT:0,direct:false,seen:0,stung:false,doorAt:0,stuck:0,aware:false,lastSeen:0,target:null,chaseAt:0,contact:0,reaction:mode==='door'?FSP.doorReaction:FSP.reaction,life:a.spider?FSP.life:mode==='hunt'?6:mode==='watch'?5:2.4});
   if(a.spider)window.FacilitySpider.reset(a.spider);if(a.ghost)window.FacilityGhost.reset(a.ghost);
   a.g.position.set(a.x,a.y,a.z);a.g.rotation.y=Math.atan2(F.pl.x-a.x,F.pl.z-a.z);a.g.visible=a.revealed;S.active=a;S.next=F.t+38+Math.random()*18;return true;
 }
@@ -16364,29 +16366,68 @@ function facHauntSting(F,a){
   if(F.post&&meta.flash!==false)F.post.mat.uniforms.uHurt.value=Math.max(F.post.mat.uniforms.uHurt.value,.12);
 }
 function facHauntEnd(F){const S=F.haunt,a=S&&S.active;if(!a)return;a.on=false;a.g.visible=false;if(a.spider){a.spider.walk.paused=a.spider.run.paused=true;}S.active=null;S.next=Math.max(S.next,F.t+24);}
+/* Test the actual creature capsule, including props, floor and physical door
+   leaves. Navigation cells alone are narrower than the enlarged spider. */
+function facHauntClear(F,a,tx,ty,tz){
+  if(Math.abs(ty-a.y)>.3)return false;
+  const distance=Math.hypot(tx-a.x,tz-a.z);if(distance>12)return false;
+  const steps=Math.max(1,Math.ceil(distance/.24)),radius=a.radius||.26,height=a.height||1.9,stepUp=a.spider?.28:.4;
+  for(let i=1;i<=steps;i++){
+    const t=i/steps,p={x:a.x+(tx-a.x)*t,y:a.y,z:a.z+(tz-a.z)*t};
+    const floor=facGround(F,p.x,p.z,p.y,.1);if(Math.abs(floor-a.y)>.2)return false;
+    if(facPush(F,p,radius,height,stepUp)>.002)return false;
+  }return true;
+}
 function facHauntWalk(F,a,tx,ty,tz,speed,dt){
-  a.repath-=dt;
-  if(a.repath<=0){a.repath=.7;const s=facNodeNear(F,a.x,a.y,a.z),t=facNodeNear(F,tx,ty,tz);a.path=facPath(F,s,t,3000,true);a.pi=1;}
-  if(!a.path||a.pi>=a.path.length)return;
-  const n=a.path[a.pi],p=facNP(F,n),di=F.nav.doorOf[n];
-  if(di>=0){
-    const door=F.doors[di];
-    if(door.lock){a.path=null;a.repath=.7;return;}
-    // Walk through the middle of the opening, rather than the quarter-cell
-    // next to a jamb. Request a door once, not once per animation frame.
-    p[0]=door.cx;p[2]=door.cz;
-    if(Math.abs(door.th)<1.4){
-      if(F.t>=(a.doorAt||0)&&Math.abs(door.tgt)<1.4){facDoorOpen(F,door,a.x,a.z,false);a.doorAt=F.t+1;}
-      return;
+  a.repath=(a.repath||0)-dt;a.lineT=(a.lineT||0)-dt;
+  if(a.lineT<=0){a.lineT=.18;a.direct=facHauntClear(F,a,tx,ty,tz);}
+  let p;
+  if(a.direct)p=[tx,ty,tz];
+  else{
+    if(a.repath<=0||!a.path){a.repath=.45;const start=facNodeNear(F,a.x,a.y,a.z),goal=facNodeNear(F,tx,ty,tz);a.path=facPath(F,start,goal,8000,true);a.pi=1;}
+    if(!a.path)return;
+    // Skip reached nodes within the same frame. Returning at every node used
+    // to interrupt the gait and throw away a large part of the chase speed.
+    while(a.pi<a.path.length){
+      const node=a.path[a.pi],point=facNP(F,node),di=F.nav.doorOf[node];
+      if(di>=0){
+        const door=F.doors[di];if(door.lock){a.path=null;a.repath=.45;return;}
+        point[0]=door.cx;point[2]=door.cz;
+        if(Math.abs(door.th)<1.4){
+          if(F.t>=(a.doorAt||0)&&Math.abs(door.tgt)<1.4){facDoorOpen(F,door,a.x,a.z,false);a.doorAt=F.t+1;}
+          return;
+        }
+      }
+      if(Math.hypot(point[0]-a.x,point[2]-a.z)<.16&&Math.abs(point[1]-a.y)<.4){a.pi++;continue;}
+      // Give a larger capsule room at walls and furniture corners. Keep the
+      // original door-centre waypoint so a jamb cannot pull it to one side.
+      if(di<0){const clear={x:point[0],y:point[1],z:point[2]},pen=facPush(F,clear,a.radius||.26,a.height||1.9,a.spider?.28:.4);
+        if(pen<.3&&facPush(F,{...clear},(a.radius||.26)-.004,a.height||1.9,a.spider?.28:.4)<.002){point[0]=clear.x;point[2]=clear.z;}}
+      p=point;break;
     }
+    if(!p)return;
   }
-  const d=Math.hypot(p[0]-a.x,p[2]-a.z);if(d<.16){a.pi++;return;}
+  const d=Math.hypot(p[0]-a.x,p[2]-a.z);if(d<.01)return;
   const step=Math.min(d,speed*dt),target=Math.atan2(p[0]-a.x,p[2]-a.z),turn=Math.atan2(Math.sin(target-a.g.rotation.y),Math.cos(target-a.g.rotation.y));
   a.g.rotation.y+=clamp(turn,-dt*9,dt*9);
-  const ox=a.x,oz=a.z;
-  facMove(F,a,(p[0]-a.x)/d*step,(p[2]-a.z)/d*step,a.radius||.26,a.height||1.9,a.spider?.28:.4);
+  const ox=a.x,oz=a.z;facMove(F,a,(p[0]-a.x)/d*step,(p[2]-a.z)/d*step,a.radius||.26,a.height||1.9,a.spider?.28:.4);
   const ground=facGround(F,a.x,a.z,a.y,.35);if(Math.abs(ground-a.y)<.45)a.y=ground;
-  if(Math.hypot(a.x-ox,a.z-oz)<.005){a.stuck=(a.stuck||0)+dt;if(a.stuck>.6){a.repath=0;a.path=null;a.stuck=0;}}else a.stuck=0;
+  if(Math.hypot(a.x-ox,a.z-oz)<Math.min(.005,step*.15)){a.stuck=(a.stuck||0)+dt;if(a.stuck>.45){a.repath=0;a.path=null;a.lineT=0;a.stuck=0;}}else a.stuck=0;
+}
+function facSpiderPursue(F,a,dt){
+  const pl=F.pl,level=Math.abs(a.y-pl.y)<.65,distance=Math.hypot(a.x-pl.x,a.z-pl.z);
+  const sees=level&&distance<18&&facSee(F,a.x,a.y+a.eye,a.z,pl.x,pl.y+(pl.crouch?.9:1.3),pl.z,true);
+  if(sees){
+    a.lastSeen=a.age;a.target={x:pl.x,y:pl.y,z:pl.z};
+    if(!a.aware){a.aware=true;a.chaseAt=a.age+a.reaction;a.repath=0;a.lineT=0;facHauntSting(F,a);facTip(F,'The spider spotted you. Sprint or break line of sight.',2.5);}
+  }
+  if(a.aware&&a.age-a.lastSeen>FSP.lost){facHauntEnd(F);return;}
+  if(a.aware&&a.age>=a.chaseAt){
+    a.mode='hunt';const elapsed=a.age-a.chaseAt,speed=(elapsed>FSP.fatigue?FSP.tired:FSP.chase)*(.55+.45*clamp(elapsed/.8,0,1));
+    if(distance>1.05||!sees){const target=a.target;if(target)facHauntWalk(F,a,target.x,target.y,target.z,speed,dt);}
+    if(sees&&distance<1.15){a.contact=(a.contact||0)+dt;if(a.contact>.2){a.stung=false;facHauntSting(F,a);facHauntEnd(F);return;}}else a.contact=0;
+  }
+  if(a.age>a.life)facHauntEnd(F);
 }
 function facHauntAhead(F){
   const pl=F.pl,fx=-Math.sin(pl.yaw),fz=-Math.cos(pl.yaw);
@@ -16410,6 +16451,8 @@ function facHauntTick(F,dt){
     if(!a.revealed){
       if(Math.abs(a.door.th)>.5&&facSee(F,pl.x,F.camY,pl.z,a.x,a.y+a.eye,a.z,false)){a.revealed=true;a.age=0;a.g.visible=true;facHauntSting(F,a);}
       else if(a.age>5){facHauntEnd(F);return;}
+    }else if(a.spider){
+      facSpiderPursue(F,a,dt);if(S.active!==a)return;
     }else{
       const level=Math.abs(a.y-pl.y)<.65,dist=Math.hypot(a.x-pl.x,a.z-pl.z,(a.y-pl.y)*2),line=facSee(F,pl.x,F.camY,pl.z,a.x,a.y+a.eye,a.z,false),visible=facOnScreen(F,a.x,a.y+a.eye,a.z)&&line;
       if(a.mode==='watch'){
@@ -16421,8 +16464,7 @@ function facHauntTick(F,dt){
         if(visible)facHauntSting(F,a);
       }else{
         if(visible&&a.age>.15)facHauntSting(F,a);
-        if(a.kind==='crawler'&&a.mode==='door'){a.life=5;a.mode='hunt';}
-        if(dist>1.25)facHauntWalk(F,a,pl.x,pl.y,pl.z,a.kind==='crawler'?2.8:2.5,dt);
+        if(dist>1.25)facHauntWalk(F,a,pl.x,pl.y,pl.z,2.5,dt);
         if(level&&line&&dist<1.35){facHauntSting(F,a);a.age=Math.max(a.age,a.life-.3);}
       }
       if(a.age>a.life){facHauntEnd(F);return;}
@@ -20232,9 +20274,9 @@ fixBar();buildTitleLevel();resize();requestAnimationFrame(frame);
   document.getElementById('ro-skip').addEventListener('click',dismiss);
 })();
 </script>
-<script src="assets/horror/spider.js?v=creatures-r2-20261020"></script>
-<script src="assets/horror/ghost.js?v=creatures-r2-20261020"></script>
-<script src="assets/horror/signs.js?v=creatures-r2-20261020"></script>
+<script src="assets/horror/spider.js?v=spider-chase-r1-20261020"></script>
+<script src="assets/horror/ghost.js?v=spider-chase-r1-20261020"></script>
+<script src="assets/horror/signs.js?v=spider-chase-r1-20261020"></script>
 <script id="facility-direct-entry">
 (function(){
   let tries=0,done=false;

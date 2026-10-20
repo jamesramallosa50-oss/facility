@@ -38,8 +38,8 @@ function harness(buildGeometry=false){
     section('const FAC=','let FACW=')+
     section('const FDM=','/* ---------- sound:')+
     section('function facPlayer(F,dt)','/* ---------- looking at things you can use')+
-    section('/* Native Facility encounters.','/* ---------- each frame ---------- */');
-  vm.runInContext(code+'\nglobalThis.api={facPlan,facGrid,facNav,facNodeNear,facNP,facPath,facMove,facPush,facPlayer,facGround,facDoorSeg,facDoorDistance,facDoorSweep,facDoorsInit,facDoorsTick,facDoorOpen,facHauntInit,facHauntDoor,facHauntWalk,facHauntTick,facHauntEnd,facHauntFree,facHauntSpawn,facHauntDispose,facDmCatch,facDmState,facDmReveal,facDmPlace,facDemonTick,facDirector,facDmSee,facWallLightMount,facWallLightGeo,facGeomLights,facLightsPrep,FDM,facGeomAll,facBake,FAC,FCY,FNX,FNZ};',ctx);
+    section('const FSP=','/* ---------- each frame ---------- */');
+  vm.runInContext(code+'\nglobalThis.api={facPlan,facGrid,facNav,facNodeNear,facNP,facPath,facMove,facPush,facPlayer,facGround,facDoorSeg,facDoorDistance,facDoorSweep,facDoorsInit,facDoorsTick,facDoorOpen,facHauntInit,facHauntDoor,facHauntWalk,facHauntTick,facHauntEnd,facHauntFree,facHauntSpawn,facHauntDispose,facHauntClear,facSpiderPursue,facDmCatch,facDmState,facDmReveal,facDmPlace,facDemonTick,facDirector,facDmSee,facWallLightMount,facWallLightGeo,facGeomLights,facLightsPrep,FDM,facGeomAll,facBake,FAC,FCY,FNX,FNZ};',ctx);
   vm.runInContext('facDoorGeo=()=>({rotation:{y:0}});facLook=()=>{};facUse=()=>{};',ctx);
   const A=ctx.api,W=A.facPlan();A.facGrid(W);if(buildGeometry)A.facGeomAll(W);
   const F={W,doors:[],scene:new T.Scene(),t:20,noise:[],dm:{x:2,y:4,z:2,on:false,vis:false,st:'away'},stage:'find',fuses:0,dir:{t:0,lastChase:0,lastSeen:0,recoverUntil:0,graceUntil:0},camY:5.62,U:{uPow:{value:1},uEmg:{value:1}},pl:{x:11,y:4,z:8.2,yaw:0,pitch:0,vx:0,vz:0,vy:0,ground:true,sta:1,bat:1,light:true,crouch:false,bob:0,bobA:0,roll:0,ch:1.62,fear:0}};
@@ -154,7 +154,7 @@ test('the uploaded spider retains its rig, geometry and animated walk/run poses'
 });
 test('a creature waiting at a closed door requests opening once',()=>{
   const {ctx,A,F}=harness();let opens=0;
-  F.nav={doorOf:[-1,0]};F.doors=[{cx:24,cz:3,y:4,th:0,tgt:0,lock:false}];
+  F.nav={doorOf:[-1,0]};F.doors=[{cx:24,cz:3,hx:24,hz:2.52,y:4,w:.96,a0:Math.PI/2,th:0,tgt:0,lock:false}];
   ctx.facNodeNear=()=>0;ctx.facPath=()=>[0,1];ctx.facNP=()=>[24,4,3];
   ctx.facDoorOpen=(F,d)=>{opens++;d.tgt=1.58;return true;};
   const a={x:22,y:4,z:3,g:new T.Group(),repath:0,path:null,pi:0};
@@ -314,4 +314,50 @@ test('all six marked spider doors can still prime the enlarged creature',()=>{
     F.pl.x=d.cx-1.5;F.pl.y=d.y;F.pl.z=d.cz;F.camY=d.y+1.62;F.t+=80;F.haunt.next=0;
     A.facHauntDoor(F,d,F.pl.x,F.pl.z);assert(F.haunt.active&&F.haunt.active.kind==='crawler','Larger spider cannot spawn behind east-wing door at '+d.cx+','+d.cz+' floor '+d.k);A.facHauntEnd(F);
   }A.facHauntDispose(F);
+});
+
+test('the spider gives a reaction window and keeps closing on a walking player beyond six seconds',()=>{
+  const {A,F}=harness();A.facHauntInit(F);F.pl.x=47.75;F.pl.y=4;F.pl.z=10;F.camY=5.62;
+  assert(A.facHauntSpawn(F,'crawler',[47.75,4,6],'hunt'));const spider=F.haunt.active;
+  for(let i=1;i<=160;i++){
+    const t=i*.05;F.t+=.05;F.pl.z=10+3.15*t;A.facHauntTick(F,.05);
+    if(i===12)assert(Math.abs(spider.z-6)<.001,'Initial warning should allow time to react');
+  }
+  assert(F.haunt.active===spider,'A real pursuit should last longer than the former six-second scare');
+  assert(spider.z>30,'The spider should actually move down the corridor after the player');
+  assert(F.pl.z-spider.z<4,'It should close the initial gap while the player only walks');
+  A.facHauntDispose(F);
+});
+test('spider pursuit follows the last visible position and gives up after cover breaks sight',()=>{
+  const {ctx,A,F}=harness();A.facHauntInit(F);F.pl.x=47.75;F.pl.y=4;F.pl.z=36;F.camY=5.62;
+  assert(A.facHauntSpawn(F,'crawler',[47.75,4,25],'hunt'));const spider=F.haunt.active,goals=[];
+  ctx.facHauntWalk=(F,a,x,y,z,speed)=>goals.push({x,y,z,speed});
+  for(let i=0;i<30;i++){F.t+=.05;A.facHauntTick(F,.05);}assert(spider.aware&&goals.length>0);
+  F.pl.x=55;F.pl.z=33;
+  for(let i=0;i<60;i++){F.t+=.05;A.facHauntTick(F,.05);}
+  assert(F.haunt.active===spider);assert(goals.every(p=>p.x===47.75&&p.z===36),'Cover must prevent perfect tracking of the hidden player');
+  for(let i=0;i<12;i++){F.t+=.05;A.facHauntTick(F,.05);}assert.equal(F.haunt.active,null,'Breaking sight should end the chase');
+  A.facHauntDispose(F);
+});
+test('an actual door reveal lets the enlarged spider pursue into the corridor',()=>{
+  const {A,F}=harness();A.facHauntInit(F);A.facDoorsInit(F,{});A.facNav(F);
+  const d=F.doors.find(d=>d.k===1&&Math.abs(d.cx-49.25)<.1&&Math.abs(d.cz-10.75)<.1);assert(d);
+  F.pl.x=47.75;F.pl.y=4;F.pl.z=d.cz;F.camY=5.62;d.th=d.tgt=0;F.haunt.next=0;
+  A.facDoorOpen(F,d,F.pl.x,F.pl.z,false);assert(F.haunt.active);const spider=F.haunt.active;let nearest=spider.x;
+  for(let i=0;i<160&&F.haunt.active;i++){F.t+=.05;A.facDoorsTick(F,.05);A.facHauntTick(F,.05);nearest=Math.min(nearest,spider.x);}
+  assert(nearest<49.05,'Spider stayed behind the open door at x='+nearest);A.facHauntDispose(F);
+});
+test('the enlarged creature can route around a solid obstacle rather than run in place',()=>{
+  const {ctx,A,F}=harness();F.W.bh=new Map();
+  const block={x0:56,y0:4,z0:21,x1:58,y1:5.2,z1:23,m:'prop'};ctx.facHashAdd(F.W.bh,block);A.facNav(F);
+  const a={x:52.25,y:4,z:22,g:new T.Group(),spider:{},radius:.42,height:.78,repath:0,path:null,pi:0};
+  assert.equal(A.facHauntClear(F,a,62.25,4,22),false,'The direct line should be blocked');let detour=0;
+  for(let i=0;i<200;i++){F.t+=.05;A.facHauntWalk(F,a,62.25,4,22,3.85,.05);detour=Math.max(detour,Math.abs(a.z-22));}
+  assert(detour>1.3,'The route should pass around the box');assert(Math.hypot(a.x-62.25,a.z-22)<.8,'Creature got stuck on the obstacle at '+a.x+','+a.z);
+});
+test('a sprinting player gains distance from the spider',()=>{
+  const {A,F}=harness();A.facHauntInit(F);F.pl.x=47.75;F.pl.y=4;F.pl.z=10;F.camY=5.62;
+  assert(A.facHauntSpawn(F,'crawler',[47.75,4,6],'hunt'));const spider=F.haunt.active;
+  for(let i=1;i<=80;i++){F.t+=.05;F.pl.z=10+5.9*i*.05;A.facHauntTick(F,.05);}
+  assert(F.pl.z-spider.z>10,'Sprinting should provide a fair escape');A.facHauntDispose(F);
 });
