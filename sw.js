@@ -1,5 +1,5 @@
 /* The Facility: network-first entry pages keep gameplay upgrades current. */
-const CACHE='facility-spider-chase-r1-20261020';
+const CACHE='facility-rotate-ui-r1-20261020';
 const FILES=['./','./index.html','./game.html','./game-core.html','./assets/horror/spider.js','./assets/horror/ghost.js','./assets/horror/signs.js','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./apple-touch-icon.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE&&!x.startsWith('gloomspire-assets')).map(x=>caches.delete(x)))).then(()=>self.clients.claim()));});
