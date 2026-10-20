@@ -9,6 +9,8 @@ const path=require('node:path');
 const root=path.resolve(__dirname,'..');
 const {parseSpider}=require('./helpers/spider-asset.cjs');
 const spiderRuntime=fs.readFileSync(path.join(root,'assets/horror/spider.js'),'utf8');
+const ghostRuntime=fs.readFileSync(path.join(root,'assets/horror/ghost.js'),'utf8');
+const signRuntime=fs.readFileSync(path.join(root,'assets/horror/signs.js'),'utf8');
 const html=fs.readFileSync(path.join(root,'game-core.html'),'utf8');
 const scripts=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].map(m=>m[1]);
 const core=scripts.find(s=>s.includes('function facPlan()'));
@@ -18,32 +20,35 @@ const threeCtx={};vm.createContext(threeCtx);vm.runInContext(three,threeCtx);
 const T=threeCtx.THREE;
 function harness(buildGeometry=false){
   const ctx={T,console,performance,Float32Array,Uint8Array,Int8Array,Int16Array,Int32Array,Uint32Array,Map,Set,Math,Promise,setTimeout,
-    document:{createElement:()=>({getContext:()=>({fillRect(){},fillText(){}})})},
+    document:{createElement:()=>({getContext:()=>({font:'',fillRect(){},strokeRect(){},fillText(){},save(){},restore(){},translate(){},rotate(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},measureText(t){return{width:t.length*(parseFloat(this.font.match(/([0-9]+)px/)?.[1])||25)*.58};}})})},
     keys:{},touchMove:{x:0,y:0},padMove:{x:0,y:0},padRun:false,firing:false,HZ:{},meta:{flash:false},
     sens:()=>1,clamp:(x,a,b)=>Math.max(a,Math.min(b,x)),vib:()=>{},
-    facSndGasp(){},facSndStep(){},facSndLand(){},facSndClick(){},facSndCreak(){},facSndSlam(){},facSndBump(){},facSndBang(){},facSndLatch(){},facSndRattle(){},facSting(){},facPS(){},sfxT(){},sfxN(){},facTip(){},
+    facSndGasp(){},facSndStep(){},facSndLand(){},facSndClick(){},facSndCreak(){},facSndSlam(){},facSndBump(){},facSndBang(){},facSndLatch(){},facSndRattle(){},facDmRoar(){},facDmSniff(){},facDmBreath(){},facDie(){ctx.HZ.dead=true;},facSting(){},facPS(){},sfxT(){},sfxN(){},facTip(){},
   };
   ctx.THREE=T;ctx.window=ctx;
   vm.createContext(ctx);
-  vm.runInContext(spiderRuntime,ctx);
+  vm.runInContext(spiderRuntime,ctx);vm.runInContext(ghostRuntime,ctx);vm.runInContext(signRuntime,ctx);
   const model=new T.Group();model.add(new T.Mesh(new T.BoxGeometry(1,.3,1),new T.MeshStandardMaterial()));
   ctx.FacilitySpider.prepare({scene:model,animations:[new T.AnimationClip('Spider walking',1,[]),new T.AnimationClip('Spider running',.3,[])]});
+  const ghost=new T.Group();ghost.add(new T.Mesh(new T.BoxGeometry(.4,2,.3),new T.MeshStandardMaterial()));
+  ctx.FacilityGhost.prepare({scene:ghost,animations:['Stalking 1','Stalking 2','Stalking 3','Chasing'].map(n=>new T.AnimationClip('Armature|'+n,5,[]))});
   const code=section('const FCY=','/* ===== BUILD 3.15: THE FACILITY — part 2:')+
     section('function facDoorSeg(d)','/* ---------- doors: heavy leaves')+
     section('function facDoorGeo(F,M,d)','/* ===== BUILD 3.15: THE FACILITY — part 4:')+
     section('const FAC=','let FACW=')+
+    section('const FDM=','/* ---------- sound:')+
     section('function facPlayer(F,dt)','/* ---------- looking at things you can use')+
     section('/* Native Facility encounters.','/* ---------- each frame ---------- */');
-  vm.runInContext(code+'\nglobalThis.api={facPlan,facGrid,facNav,facNodeNear,facNP,facPath,facMove,facPush,facPlayer,facGround,facDoorSeg,facDoorDistance,facDoorSweep,facDoorsInit,facDoorsTick,facDoorOpen,facHauntInit,facHauntDoor,facHauntWalk,facHauntTick,facHauntEnd,facHauntFree,facHauntSpawn,facHauntDispose,facGeomAll,facBake,FAC,FCY,FNX,FNZ};',ctx);
+  vm.runInContext(code+'\nglobalThis.api={facPlan,facGrid,facNav,facNodeNear,facNP,facPath,facMove,facPush,facPlayer,facGround,facDoorSeg,facDoorDistance,facDoorSweep,facDoorsInit,facDoorsTick,facDoorOpen,facHauntInit,facHauntDoor,facHauntWalk,facHauntTick,facHauntEnd,facHauntFree,facHauntSpawn,facHauntDispose,facDmCatch,facDmState,facDmReveal,facDmPlace,facDemonTick,facDirector,facDmSee,FDM,facGeomAll,facBake,FAC,FCY,FNX,FNZ};',ctx);
   vm.runInContext('facDoorGeo=()=>({rotation:{y:0}});facLook=()=>{};facUse=()=>{};',ctx);
   const A=ctx.api,W=A.facPlan();A.facGrid(W);if(buildGeometry)A.facGeomAll(W);
-  const F={W,doors:[],scene:new T.Scene(),t:20,noise:[],dm:{x:2,y:4,z:2,on:false,vis:false,st:'away'},stage:'find',camY:5.62,U:{uPow:{value:1}},pl:{x:11,y:4,z:8.2,yaw:0,pitch:0,vx:0,vz:0,vy:0,ground:true,sta:1,bat:1,light:true,crouch:false,bob:0,bobA:0,roll:0,ch:1.62,fear:0}};
+  const F={W,doors:[],scene:new T.Scene(),t:20,noise:[],dm:{x:2,y:4,z:2,on:false,vis:false,st:'away'},stage:'find',fuses:0,dir:{t:0,lastChase:0,lastSeen:0,recoverUntil:0,graceUntil:0},camY:5.62,U:{uPow:{value:1},uEmg:{value:1}},pl:{x:11,y:4,z:8.2,yaw:0,pitch:0,vx:0,vz:0,vy:0,ground:true,sta:1,bat:1,light:true,crouch:false,bob:0,bobA:0,roll:0,ch:1.62,fear:0}};
   A.facNav(F);ctx.HZ={pl:F.pl,padHold:false};ctx.cam=new T.PerspectiveCamera();
   return{ctx,A,F,W};
 }
 const shared=harness(true);
 test('every inline script parses, including launch entry points',()=>{
-  new vm.Script(spiderRuntime,{filename:'assets/horror/spider.js'});
+  for(const [name,code] of [['spider',spiderRuntime],['ghost',ghostRuntime],['signs',signRuntime]])new vm.Script(code,{filename:'assets/horror/'+name+'.js'});
   for(const file of ['game-core.html','game.html','index.html']){
     const h=fs.readFileSync(path.join(root,file),'utf8');
     for(const s of h.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Script(s[1],{filename:file});
@@ -160,4 +165,81 @@ test('spider proximity scares respect walls and floor height',()=>{
   spider.y=0;ctx.facOnScreen=()=>false;ctx.facSee=()=>true;A.facHauntTick(F,.05);
   assert.equal(spider.stung,false,'No proximity attack through another floor');
   A.facHauntDispose(F);
+});
+
+test('all seventeen placards have solid support and leave the door openings clear',()=>{
+  const {ctx,A,F,W}=harness();A.facHauntInit(F);
+  assert.equal(W.wingSigns.length,17);assert.equal(F.haunt.signs.length,17,'Every configured sign should have a valid mount');
+  for(const sign of W.wingSigns)assert(ctx.FacilitySigns.mounted(sign,A.FCY[sign.k],(x,y,z)=>ctx.facAir(W,x,y,z)),sign.text+' has no wall support');
+  for(const sign of W.wingSigns.filter(s=>s.x===49))assert(sign.y-(sign.height||.4)/2>2.38,'Room placard crosses a door header');
+  for(const sign of F.haunt.signs){assert.equal(sign.children.length,2);assert(sign.children[1].position.z>.016,'Printed face must clear its backing');}
+  // Reject the former floating stair sign instead of rendering a billboard in air.
+  assert.equal(ctx.FacilitySigns.mounted({k:1,x:65.5,z:45.72,nx:-1,nz:0},4,(x,y,z)=>ctx.facAir(W,x,y,z)),false);
+  A.facHauntDispose(F);
+});
+test('the uploaded ghost keeps all four meshes, seventy joints and native animation without root drift',async()=>{
+  const gl=await parseSpider(T,path.join(root,'assets/horror/unvermeidlich-ghost.glb'),path.join(root,'assets/horror/gltf.js'));
+  const {ctx}=harness(),G=ctx.FacilityGhost,asset=G.prepare(gl),meshes=[];gl.scene.traverse(o=>{if(o.isSkinnedMesh)meshes.push(o);});
+  assert.equal(meshes.length,4);assert(meshes.every(m=>m.skeleton.bones.length===70));assert.equal(meshes.reduce((n,m)=>n+m.geometry.index.count/3,0),3048);assert.equal(gl.animations.length,4);
+  assert(meshes.some(m=>m.material.transparent),'Native hair/dress transparency should survive');
+  const ghost=G.createActor(),head=asset.root.getObjectByName('Head_06'),hips=asset.root.getObjectByName('Hips_01'),initial=head.quaternion.clone();
+  const parent=new T.Group();parent.position.set(10,4,25);parent.rotation.y=.9;parent.add(ghost.visual);
+  let maxHeight=0;
+  for(let i=0;i<180;i++){
+    G.tick(ghost,1,1/60,'door');
+    const local=ghost.visual.worldToLocal(hips.getWorldPosition(new T.Vector3()));
+    assert(Math.abs(local.x)<1e-4&&Math.abs(local.z)<1e-4,'Root motion escaped the collision-controlled actor');
+    if(i%15===0){const bounds=G.poseBounds(asset.root);maxHeight=Math.max(maxHeight,bounds.max.y-4);assert(bounds.min.y>3.98,'Animated feet should not sink below the floor');}
+  }
+  assert(initial.angleTo(head.quaternion)>.01,'Original ghost head should animate');assert(maxHeight>1.7&&maxHeight<2.2,'Ghost must fit under Facility doorways');
+  G.reset(ghost);G.tick(ghost,0,1/60,'watch');
+  parent.rotation.y=0;G.tick(ghost,0,1/60,'watch');
+  assert(head.getWorldPosition(new T.Vector3()).z>hips.getWorldPosition(new T.Vector3()).z,'Ghost should face actor +Z');
+  G.release(ghost);assert.equal(asset.visual.parent,null);const retry=G.createActor();G.tick(retry,1,1/60,'watch');assert.equal(asset.visual.parent,retry.visual);G.release(retry);
+});
+function hunter(){
+  const h=harness(),{ctx,F}=h;
+  Object.assign(F.dm,{on:true,g:new T.Group(),st:'prowl',stT:0,t:0,sees:0,waitT:100,alert:0,senT:0,face:0,x:F.pl.x,y:F.pl.y,z:F.pl.z-5,safeUntil:0});
+  ctx.facDmSee=()=>1;ctx.facDmHear=()=>null;ctx.facDmBody=()=>{};ctx.facDmGo=(F,x,y,z,speed)=>{F.lastGoal={x,y,z,speed};return'move';};
+  return h;
+}
+test('hunter recognition gives a warning and noise alone never starts a chase',()=>{
+  const {ctx,A,F}=hunter();let warnings=0;ctx.facTip=()=>warnings++;
+  for(let i=0;i<16;i++){F.t+=.05;A.facDemonTick(F,.05);}assert.equal(F.dm.st,'prowl');assert(warnings>=1);
+  for(let i=0;i<10;i++){F.t+=.05;A.facDemonTick(F,.05);}assert.equal(F.dm.st,'chase');assert(F.dm.safeUntil>F.t);
+  A.facDmState(F,'prowl');F.dm.alert=0;ctx.facDmSee=()=>0;ctx.facDmHear=()=>({x:12,y:4,z:3,r:80});
+  for(let i=0;i<10;i++){F.t+=.05;A.facDemonTick(F,.05);}assert.equal(F.dm.st,'inv','Loud noises should trigger investigation');
+});
+test('hunter loses visual tracking behind cover, tires on long chases, and rests after escape',()=>{
+  const {ctx,A,F}=hunter();F.fuses=3;F.dir.final=true;A.facDmState(F,'chase');F.dm.stT=2;F.dm.mem={x:12,y:4,z:9,t:F.t};ctx.facDmSee=()=>0;
+  F.pl.x=40;F.pl.z=30;F.t+=.5;A.facDemonTick(F,.05);
+  assert.equal(F.lastGoal.x,12,'Should visit the last known position instead of tracking through walls');assert(F.lastGoal.speed<5.9);
+  F.dm.stT=8.1;F.dm.lastVisual=F.t;A.facDemonTick(F,.05);assert(F.lastGoal.speed<A.FAC.walk,'Tired hunter should be escapable at walking speed');
+  F.t+=4.1;A.facDemonTick(F,.05);assert.equal(F.dm.st,'search');assert(F.dir.recoverUntil>=F.t+14);
+  const before=F.dm.alert;ctx.facDmSee=()=>1;F.t+=.1;A.facDemonTick(F,.05);assert(F.dm.alert<=before,'Recovery should stop an immediate repeat chase');
+});
+test('a hunter grab needs sustained visible contact and respects closed doors, floors and reaction time',()=>{
+  const {ctx,A,F}=hunter();F.dm.st='chase';F.dm.z=F.pl.z-.65;ctx.facSee=()=>false;
+  for(let i=0;i<20;i++)A.facDmCatch(F,.05);assert(!ctx.HZ.dead,'A closed door or wall must block a grab');
+  ctx.facSee=()=>true;F.dm.y=0;for(let i=0;i<20;i++)A.facDmCatch(F,.05);assert(!ctx.HZ.dead,'Another floor must block a grab');F.dm.y=F.pl.y;
+  F.dm.st='reveal';for(let i=0;i<20;i++)A.facDmCatch(F,.05);assert(!ctx.HZ.dead,'Reveals cannot kill');
+  F.dm.st='chase';F.dm.safeUntil=F.t+1.2;for(let i=0;i<20;i++)A.facDmCatch(F,.05);assert(!ctx.HZ.dead,'Reaction window must prevent a grab');F.dm.safeUntil=0;
+  for(let i=0;i<8;i++)A.facDmCatch(F,.05);assert(!ctx.HZ.dead,'Brief contact should be escapable');
+  F.dm.z-=1;A.facDmCatch(F,.05);assert.equal(F.dm.grabT,0);F.dm.z=F.pl.z-.65;
+  for(let i=0;i<11;i++)A.facDmCatch(F,.05);assert(ctx.HZ.dead,'Sustained visible contact should still be dangerous');
+});
+test('final alarm targets the breaker rather than a hidden player',()=>{
+  const {ctx,A,F}=hunter();F.dir.final=true;F.dm.st='prowl';F.dm.stT=0;ctx.facOnScreen=()=>true;F.dir.ambT=1000;
+  A.facDirector(F,.05);assert.equal(F.dm.mem.x,F.W.breaker.x);assert.equal(F.dm.mem.z,F.W.breaker.z);
+});
+test('the real closed door leaf blocks a grab and opening it restores line of sight',()=>{
+  const {ctx,A,F}=hunter();F.dm.st='chase';F.dm.x=48.93;F.dm.z=21.75;F.pl.x=49.57;F.pl.z=21.75;
+  const door={hx:49.25,hz:21.02,y:4,w:1.46,a0:Math.PI/2,th:0,tgt:0};F.doors=[door];
+  for(let i=0;i<15;i++)A.facDmCatch(F,.05);assert(!ctx.HZ.dead);assert.equal(F.dm.grabT,0);
+  door.th=-Math.PI/2;for(let i=0;i<11;i++)A.facDmCatch(F,.05);assert(ctx.HZ.dead,'Opening the door should restore visible physical contact');
+});
+test('the opening grace period prevents detection and director ambushes',()=>{
+  const {ctx,A,F}=hunter();F.dir.graceUntil=F.t+35;F.dir.alertAt=F.t;F.dir.ambT=0;F.dm.stT=0;
+  for(let i=0;i<60;i++){F.t+=.05;A.facDemonTick(F,.05);A.facDirector(F,.05);}
+  assert.equal(F.dm.st,'prowl');assert.equal(F.dm.alert,0);assert(!ctx.HZ.dead);
 });

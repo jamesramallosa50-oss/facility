@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>The Facility — Wolf Spider</title>
-<meta name="facility-build" content="wolf-spider-r1-20261020">
+<title>The Facility — The Unvermeidlich</title>
+<meta name="facility-build" content="ghost-signs-r1-20261020">
 <meta name="theme-color" content="#060807">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="mobile-web-app-capable" content="yes">
@@ -14535,8 +14535,8 @@ function facPlan(){
     L(k,57,5.25,'x','cyan');L(k,57,45.75,'x',col);
     L(k,47.8,22,'z','red',{dim:.6});L(k,66.8,40,'z','red',{dim:.65});
     vent(k,47.75,30);vent(k,66.75,18);
-    for(let j=0;j<4;j++)W.wingSigns.push({k,x:49.02,z:[8.6,19.7,29.6,36.9][j],nx:-1,nz:0,text:wingNames[k][j],sub:['A / RESEARCH','B / SERVICES','C / RESTRICTED'][k]});
-    W.wingSigns.push({k,x:65.5,z:45.72,nx:-1,nz:0,text:'STAIRS / ALL LEVELS',sub:'FREIGHT LIFT / BASEMENT'});
+    for(let j=0;j<4;j++)W.wingSigns.push({k,x:49,z:[10.75,21.75,30.75,38.75][j],y:2.62,nx:-1,nz:0,code:['L2','L1','B1'][k]+' / '+(j+1),text:wingNames[k][j],sub:['RESEARCH WING','MEDICAL SERVICES','RESTRICTED ACCESS'][k]});
+    W.wingSigns.push({k,x:68,z:36.5,nx:-1,nz:0,text:'STAIRS',sub:'SOUTH LANDING / ALL FLOORS',arrow:'right'});
   }
   /* Each original floor has an unobstructed entrance to the extension. */
   door(1,46,6,46.5,7.5,{style:'teal'});
@@ -14544,8 +14544,8 @@ function facPlan(){
   door(2,40,5,40.5,6.5,{style:'grey'});room(2,40.5,4.5,46.5,7,'bsm',3.2,'CONTAINMENT LINK');L(2,43,5.75,'x','cyan');
   /* Stair landing opens onto the south link; outer spine returns to it. */
   sw(61.5,35.5,1.5,1,0,2,'swc',1);
-  W.wingSigns.push({k:1,x:45.9,z:5.1,nx:-1,nz:0,text:'EAST WING',sub:'MEDICAL / RESEARCH / CONTAINMENT'});
-  W.wingSigns.push({k:2,x:41,z:4.52,nx:0,nz:1,text:'FREIGHT LIFT ←',sub:'RETURN THROUGH MAINTENANCE'});
+  W.wingSigns.push({k:1,x:46,z:5.1,nx:-1,nz:0,width:1.5,height:.375,text:'EAST WING',sub:'MEDICAL / RESEARCH',arrow:'right'});
+  W.wingSigns.push({k:2,x:43,z:4.5,nx:0,nz:1,text:'FREIGHT LIFT',sub:'VIA MAINTENANCE',arrow:'left'});
 
   facProps(W);
 
@@ -15718,7 +15718,8 @@ async function facBuild(prog){
   const step=async(p,t)=>{prog(p,t);await new Promise(r=>setTimeout(r,0));};
   await step(.005,'WAKING THE WOLF SPIDER');
   if(!window.FacilitySpider)throw new Error('Wolf spider runtime is missing');
-  await window.FacilitySpider.load(p=>prog(.005+p*.02,'WAKING THE WOLF SPIDER'),hzFetch,Math.min(4,renderer.capabilities.getMaxAnisotropy()));
+  await window.FacilitySpider.load(p=>prog(.005+p*.01,'WAKING THE WOLF SPIDER'),hzFetch,Math.min(4,renderer.capabilities.getMaxAnisotropy()));
+  await window.FacilityGhost.load(p=>prog(.015+p*.01,'WAKING THE APPARITION'),hzFetch,Math.min(4,renderer.capabilities.getMaxAnisotropy()));
   if(HZ!==H)return;
   let W;
   if(FACW){W=F.W=FACW.W;F.M=FACW.M;F.U=FACW.U;F.AT=FACW.AT;await step(.5,'BACK INSIDE');
@@ -15846,7 +15847,7 @@ function facPlayer(F,dt){
   /* footsteps and how much noise they make */
   const sp=Math.hypot(mvx,mvz);F.speed=sp;
   if(pl.ground&&sp>.3){const stride=run?1.12:pl.crouch?.62:.78;const ob=pl.bob;pl.bob+=sp*dt/stride*Math.PI;
-    if(Math.floor(ob/Math.PI)!==Math.floor(pl.bob/Math.PI)){const surf=facSurfAt(F,pl.x,pl.y,pl.z);facSndStep(F,surf,run?1:pl.crouch?.28:.6);facNoise(F,pl.x,pl.y,pl.z,run?17:pl.crouch?2.5:7);}}
+    if(Math.floor(ob/Math.PI)!==Math.floor(pl.bob/Math.PI)){const surf=facSurfAt(F,pl.x,pl.y,pl.z);facSndStep(F,surf,run?1:pl.crouch?.28:.6);facNoise(F,pl.x,pl.y,pl.z,run?11:pl.crouch?1.5:4.5);}}
   pl.bobA+=((pl.ground?Math.min(1,sp/FAC.walk):0)-pl.bobA)*Math.min(1,dt*8);
   /* use and light */
   if(H.kAct||H.kJump)facUse(F);H.kAct=H.kJump=0;
@@ -15875,14 +15876,14 @@ function facUse(F){
     if(Math.abs(d.th)<.6&&Math.abs(d.tgt)<.6){facDoorOpen(F,d,pl.x,pl.z,false);F.lastOpen={d,t:F.t};}
     else{const fast=F.speed>2.4||F.fearHi;facDoorClose(F,d,fast);if(fast){F.slamBy=F.t;d.slamT=F.t;}}}
   else if(a.t==='fuse'){const f=a.f;f.got=true;f.m.visible=f.gl.visible=false;F.held++;F.fuses++;facSndPick(F);
-    facSay(F,'FUSE '+F.fuses+' OF 3',2.2);facTip(F,F.fuses<3?'It heard that.':'All three. Get to the breaker by the freight lift.',3);facNoise(F,pl.x,pl.y,pl.z,40);F.dir.alertAt=F.t+.4;}
+    facSay(F,'FUSE '+F.fuses+' OF 3',2.2);facTip(F,F.fuses<3?'It heard that.':'All three. Get to the breaker by the freight lift.',3);facNoise(F,pl.x,pl.y,pl.z,40);F.dir.alertAt=F.t+2;}
   else if(a.t==='bat'){const b=a.b;b.got=true;b.m.visible=false;pl.bat=Math.min(1,pl.bat+.5);facSndPick(F,.6);facTip(F,'Battery +50%',1.6);}
   else if(a.t==='brk'){if(F.held>0){F.brk.sockets[F.brk.n].visible=true;F.brk.n++;F.held--;facSndPlug(F);
       if(F.brk.n>=3)facPowerUp(F);else facTip(F,'Fuses in the breaker: '+F.brk.n+' of 3',2);}
     else if(F.stage==='find')facTip(F,'Fuses in the breaker: '+F.brk.n+' of 3',2);}
 }
 /* all three fuses are in: the lift is called, the lights fail, and it comes for you */
-function facPowerUp(F){F.stage='wait';F.lift.arrive=F.t+32;facSay(F,'THE LIFT IS COMING',3);facTip(F,'Survive until it arrives',4);facSndAlarm(F);
+function facPowerUp(F){F.stage='wait';F.lift.arrive=F.t+24;facSay(F,'THE LIFT IS COMING',3);facTip(F,'Survive until it arrives',4);facSndAlarm(F);
   F.powerT=0;F.dir.final=true;facNoise(F,F.pl.x,F.pl.y,F.pl.z,80);}
 function facItems(F,dt){
   const t=F.t;for(const f of F.fz)if(!f.got){f.m.rotation.y+=dt*1.2;f.gl.material.opacity=.45+Math.sin(t*3+f.x)*.25;}
@@ -15893,25 +15894,30 @@ function facItems(F,dt){
   if(F.stage==='open'&&F.pl.x>34&&Math.abs(F.pl.z-25)<2.2&&Math.abs(F.pl.y)<.5)facWin(F);
 }
 /* ---------- the creature ---------- */
-const FDM={r:.32,h:2.02,su:.56,prowl:1.9,inv:3.1,search:1.55,chase:4.75};
+const FDM={r:.32,h:2.02,su:.56,prowl:1.35,inv:2.25,search:1.15,chase:3.8};
 function facDemonInit(F){
   const dm=F.dm,W=F.W,p=W.peek;dm.isBody=2;dm.x=p.x;dm.z=p.z;dm.y=FCY[p.k];dm.face=Math.PI/2;dm.st='peek';dm.stT=0;dm.on=true;dm.g.visible=true;
   /* the stairwell door it peeks round is open */
   for(const d of F.doors)if(Math.abs(d.cx-6.25)<.3&&Math.abs(d.cz-3)<.6&&d.k===1){d.th=d.tgt=-1.5*facDoorSide(d,10,3);d.mesh.rotation.y=-(d.a0+d.th);}
-  F.dir={t:0,calm:0,lastSeen:0,lastChase:0,ambT:38,awayT:0,alertAt:-1,final:false,seenOnce:false};
+  F.dir={t:0,calm:0,lastSeen:0,lastChase:0,ambT:58,awayT:0,alertAt:-1,final:false,seenOnce:false,graceUntil:F.t+35,recoverUntil:0};
 }
-function facDmPlace(F,x,y,z,face){const dm=F.dm;dm.x=x;dm.y=y;dm.z=z;if(face!=null)dm.face=face;dm.path=null;dm.on=true;dm.g.visible=true;dm.leap=null;dm.bash=null;}
-function facDmState(F,st){const dm=F.dm;if(dm.st!==st){dm.prev=dm.st;dm.st=st;dm.stT=0;dm.path=null;if(st==='search'){dm.sp=null;dm.looks=0;}if(st==='prowl')dm.goalP=null;}}
+function facDmPlace(F,x,y,z,face){const dm=F.dm;dm.x=x;dm.y=y;dm.z=z;if(face!=null)dm.face=face;dm.path=null;dm.on=true;dm.g.visible=true;dm.leap=null;dm.bash=null;dm.safeUntil=F.t+2;dm.grabT=0;dm.alert=0;dm.sees=0;dm.lastVisual=-99;}
+function facDmState(F,st){const dm=F.dm;if(dm.st!==st){
+  dm.prev=dm.st;dm.st=st;dm.stT=0;dm.path=null;dm.grabT=0;
+  if(st==='chase'){dm.safeUntil=Math.max(dm.safeUntil||0,F.t+1.2);dm.lastVisual=F.t;}
+  if(st==='search'){dm.sp=null;dm.looks=0;if(dm.prev==='chase'){F.dir.recoverUntil=F.t+14;dm.alert=0;}}
+  if(st==='prowl')dm.goalP=null;
+}}
 /* the creature can see you: distance, your light, the light you stand in, crouching, cover */
 function facDmSee(F){
-  const dm=F.dm,pl=F.pl,dx=pl.x-dm.x,dz=pl.z-dm.z,dy=pl.y-dm.y,dh=Math.hypot(dx,dz),d=Math.hypot(dh,dy*1.3);if(d>34)return 0;
+  const dm=F.dm,pl=F.pl,dx=pl.x-dm.x,dz=pl.z-dm.z,dy=pl.y-dm.y,dh=Math.hypot(dx,dz),d=Math.hypot(dh,dy*1.3);if(d>24)return 0;
   const pr=facProbe(F.W,pl.x,pl.y+1,pl.z),amb0=FPLA(facKindAt(F.W,Math.floor(pl.z/FC)*FNX+Math.floor(pl.x/FC),pl.y+1))?.26:.12,lum=Math.min(1,Math.max(0,((pr[0]+pr[1]+pr[2])*F.U.uPow.value+(pr[3]+pr[4]+pr[5])*F.U.uEmg.value)*.8-amb0*Math.min(1,F.U.uPow.value)));
-  let range=3.2+19*lum;
-  if(pl.light&&F.lamp){const lx=dm.x-F.lamp.x,ly=dm.y+1.6-F.lamp.y,lz=dm.z-F.lamp.z,l=Math.hypot(lx,ly,lz)||1,c=(lx*F.lamp.dx+ly*F.lamp.dy+lz*F.lamp.dz)/l;range=Math.max(range,c>.85?32:13);}
-  if(pl.crouch)range*=.58;if(F.speed>4)range*=1.15;if(dm.st==='chase')range=Math.max(range*1.7,15);
+  let range=3+13*lum;
+  if(pl.light&&F.lamp){const lx=dm.x-F.lamp.x,ly=dm.y+1.6-F.lamp.y,lz=dm.z-F.lamp.z,l=Math.hypot(lx,ly,lz)||1,c=(lx*F.lamp.dx+ly*F.lamp.dy+lz*F.lamp.dz)/l;range=Math.max(range,c>.85?22:10);}
+  if(pl.crouch)range*=.52;if(F.speed>4)range*=1.08;if(dm.st==='chase')range=Math.max(range*1.3,12);
   if(d>range)return 0;
   const fx=Math.sin(dm.face),fz=Math.cos(dm.face),cf=dh>.01?(dx*fx+dz*fz)/dh:1;
-  if(d>2.3&&cf<(dm.st==='chase'?-.3:.3))return 0;
+  if(d>2.3&&cf<(dm.st==='chase'?-.1:.45))return 0;
   if(!facSee(F,dm.x,dm.y+1.95,dm.z,pl.x,pl.y+(pl.crouch?.78:1.35),pl.z,true)){
     /* a second look at your head: crouching behind a crate only hides you if your head is covered too */
     if(!facSee(F,dm.x,dm.y+1.95,dm.z,pl.x,pl.y+(pl.crouch?1.0:1.6),pl.z,true))return 0;}
@@ -15936,7 +15942,7 @@ function facDmGo(F,tx,ty,tz,spd,dt){
   /* a door on the way: open it (or smash it when hunting) */
   for(let k=dm.pi;k<Math.min(P.length,dm.pi+4);k++){const di=N.doorOf[P[k]];if(di<0)continue;const d=F.doors[di];
     if(Math.abs(d.th)<1.05&&Math.hypot(d.cx-dm.x,d.cz-dm.z)<1.45&&!(d.opening&&Math.abs(d.tgt)>1)){const fast=dm.st==='chase'||dm.st==='inv';
-      dm.bash={d,t:0,dur:fast?(d.lock?.9:(F.t-(d.slamT||-9)<2.5?1.15:.55)):1.1,fast};if(d.lock&&fast)d.lock=false;if(!fast)facSndCreak(F,d,.6);return 'bash';}}
+      dm.bash={d,t:0,dur:fast?(d.lock?1.8:(F.t-(d.slamT||-9)<2.5?1.8:1.25)):1.4,fast};if(d.lock&&fast)d.lock=false;if(!fast)facSndCreak(F,d,.6);return 'bash';}}
   /* a ledge to jump down or leap up */
   if(dm.pi>0||dm.pi<P.length-1){for(const L of F.links){const i=P.indexOf(L.a,dm.pi),j=P.indexOf(L.b,dm.pi);
       if(i>=0&&j===i+1&&i<=dm.pi+1){const a=facNP(F,L.a),b=facNP(F,L.b);if(Math.hypot(a[0]-dm.x,a[2]-dm.z)<.9){dm.leap={a:[dm.x,dm.y,dm.z],b,t:0,dur:.75,up:false};dm.pi=j;return 'leap';}}
@@ -15964,14 +15970,14 @@ function facDemonTick(F,dt){
   /* senses, ten times a second */
   dm.senT=(dm.senT||0)-dt;if(dm.senT<=0){dm.senT=.1;dm.sees=dm.on&&dm.st!=='peek'&&dm.st!=='vent'&&dm.st!=='away'&&dm.st!=='door'?facDmSee(F):0;
     dm.heard=dm.on&&dm.st!=='peek'&&dm.st!=='away'?facDmHear(F):null;}else dm.heard=null;
-  if(dm.sees>0){dm.mem={x:pl.x,y:pl.y,z:pl.z,t:F.t};}
+  if(dm.sees>0){dm.mem={x:pl.x,y:pl.y,z:pl.z,t:F.t};dm.lastVisual=F.t;}
   let spd=0,res='';
-  const chaseSpd=FDM.chase+F.fuses*.18+(D.final?.12:0);
+  const chaseSpd=FDM.chase+F.fuses*.08+(D.final?.1:0);
   switch(dm.st){
     case 'peek':{/* standing at the stairwell door, looking down the corridor at you */dm.fwant=Math.atan2(dx,dz);
       const seen=facOnScreen(F,dm.x,dm.y+1.4,dm.z)&&dist<17&&facSee(F,pl.x,F.camY,pl.z,dm.x,dm.y+1.5,dm.z,false);if(seen){dm.seenT=(dm.seenT||0)+dt;if(!D.seenOnce&&dm.seenT>.12){D.seenOnce=1;facSting(F,1);}}
       if((dm.seenT||0)>.75||(dist<4.5&&pl.z<4.6)||dm.stT>40){facDmState(F,'withdraw');}break;}
-    case 'withdraw':{spd=2.6;res=facDmGo(F,4,FCY[1],6.5,spd,dt);if(res==='there'||dm.stT>4){dm.on=false;dm.g.visible=false;facDmState(F,'away');D.awayT=14+Math.random()*7;}break;}
+    case 'withdraw':{spd=2.6;res=facDmGo(F,4,FCY[1],6.5,spd,dt);if(res==='there'||dm.stT>4){dm.on=false;dm.g.visible=false;facDmState(F,'away');D.awayT=24+Math.random()*10;}break;}
     case 'away':break;
     case 'prowl':{spd=FDM.prowl*(D.final?1.6:1);
       if(dm.waitT>0){/* stops, listens, sniffs the air */dm.waitT-=dt;spd=0;if(Math.random()<dt*.5)facDmSniff(F);}
@@ -15982,41 +15988,54 @@ function facDemonTick(F,dt){
     case 'search':{spd=FDM.search;if(!dm.sp||dm.spT<=0||dm.spT==null){const m=dm.mem||{x:dm.x,y:dm.y,z:dm.z};dm.sp=facDmSpot(F,m.x,m.y,m.z,1.5,8,false,30)||[m.x,m.y,m.z];dm.spT=6;dm.looks=(dm.looks||0)+1;}
       dm.spT-=dt;res=facDmGo(F,dm.sp[0],dm.sp[1],dm.sp[2],spd,dt);if(res==='there'){spd=0;if(dm.lookB==null)dm.lookB=dm.face;dm.fwant=dm.lookB+Math.sin(dm.stT*1.3)*1.1;if(dm.spT>2)dm.spT=2;}else dm.lookB=null;
       if(dm.stT>18||dm.looks>4){dm.looks=0;facDmState(F,'prowl');D.calm=0;}break;}
-    case 'chase':{spd=chaseSpd*(dm.stT<.6?.75:1);const seenAgo=F.t-(dm.mem?dm.mem.t:-99);
-      const m=seenAgo<1.2?{x:pl.x,y:pl.y,z:pl.z}:dm.mem;if(!m){facDmState(F,'prowl');break;}res=facDmGo(F,m.x,m.y,m.z,spd,dt);
-      if(seenAgo>(D.final?9:5.5)){facDmState(F,'search');}
+    case 'chase':{spd=chaseSpd*(dm.stT<.8?.7:dm.stT>8?.68:1);const seenAgo=F.t-(dm.lastVisual==null?-99:dm.lastVisual);
+      const m=dm.mem;if(!m){facDmState(F,'prowl');break;}res=facDmGo(F,m.x,m.y,m.z,spd,dt);
+      if(seenAgo>(D.final?4:3.2)){facDmState(F,'search');}
       if(res==='there'&&seenAgo>1.2){facDmState(F,'search');}
       D.lastChase=F.t;break;}
-    case 'reveal':{spd=0;dm.fwant=Math.atan2(dx,dz);if(dm.stT>(dm.revT||.5)){facDmState(F,'chase');dm.mem={x:pl.x,y:pl.y,z:pl.z,t:F.t};}break;}
-    case 'stare':{spd=0;dm.fwant=Math.atan2(dx,dz);if(dm.stT>1.3||dist<5){facDmRoar(F,1);facDmState(F,'chase');dm.mem={x:pl.x,y:pl.y,z:pl.z,t:F.t};}break;}
+    case 'reveal':{spd=0;dm.fwant=Math.atan2(dx,dz);if(dm.stT>(dm.revT||1.2)){facDmState(F,'chase');}break;}
+    case 'stare':{spd=0;dm.fwant=Math.atan2(dx,dz);if(dm.stT>2){facDmReveal(F,1.2);}break;}
     case 'door':{/* waiting behind a door you are about to open */const d=dm.amb.d;dm.fwant=Math.atan2(d.cx-dm.x,d.cz-dm.z);
-      if(Math.abs(d.th)>.3){facDmReveal(F,.35);facSting(F,1.2);}
-      else if(Math.hypot(pl.x-d.cx,pl.z-d.cz)<2.1&&facDoorSide(d,pl.x,pl.z)!==facDoorSide(d,dm.x,dm.z)){dm.ambT=(dm.ambT||0)+dt;if(dm.ambT>.7){facDoorOpen(F,d,dm.x,dm.z,true);facDmReveal(F,.25);facSting(F,1.2);F.shake=.5;}}
+      if(Math.abs(d.th)>.3){facDmReveal(F,1.25);facSting(F,1.2);}
+      else if(Math.hypot(pl.x-d.cx,pl.z-d.cz)<2.1&&facDoorSide(d,pl.x,pl.z)!==facDoorSide(d,dm.x,dm.z)){dm.ambT=(dm.ambT||0)+dt;if(dm.ambT>1.4){facDoorOpen(F,d,dm.x,dm.z,true);facDmReveal(F,1.25);facSting(F,1.2);F.shake=.5;}}
       if(dm.stT>30){dm.on=false;dm.g.visible=false;facDmState(F,'away');D.awayT=8;}break;}
     case 'vent':{/* in the ceiling above a vent: you hear it, then it drops */const v=dm.amb.v;dm.y=v.y+.4;dm.vis=false;
       dm.scrT=(dm.scrT||0)-dt;const dv=Math.hypot(pl.x-v.x,pl.z-v.z);if(dm.scrT<=0&&dv<14){dm.scrT=1.2+Math.random()*1.4;facDmScrape(F,v,clamp(1-dv/14,.2,1));}
       if(dv<4.2&&Math.abs(pl.y-FCY[v.k])<1.5){/* it drops */v.fall=1;v.vy=0;facDmPlace(F,v.x,v.y-.2,v.z,Math.atan2(pl.x-v.x,pl.z-v.z));dm.drop={vy:0};facDmState(F,'drop');facSting(F,1.2);facSndGrate(F,v);}
       if(dm.stT>35){dm.on=false;dm.g.visible=false;facDmState(F,'away');D.awayT=6;}break;}
-    case 'drop':{dm.drop.vy-=16*dt;dm.y+=dm.drop.vy*dt;const g=facGround(F,dm.x,dm.z,dm.y+.05,.1);dm.fwant=Math.atan2(dx,dz);if(dm.y<=g){dm.y=g;facDmLand(F);facDmReveal(F,.4);}break;}
-    case 'cross':{spd=6.2;const B=dm.cross;res=facDmGo(F,B[0],B[1],B[2],spd,dt);
+    case 'drop':{dm.drop.vy-=16*dt;dm.y+=dm.drop.vy*dt;const g=facGround(F,dm.x,dm.z,dm.y+.05,.1);dm.fwant=Math.atan2(dx,dz);if(dm.y<=g){dm.y=g;facDmLand(F);facDmReveal(F,1.25);}break;}
+    case 'cross':{spd=4.8;const B=dm.cross;res=facDmGo(F,B[0],B[1],B[2],spd,dt);
       if(!dm.crossSeen&&dm.vis){dm.crossSeen=1;facSting(F,.8);}
-      if(dm.sees>0&&!dm.crossSaw){dm.crossSaw=1;if(dist<11&&Math.random()<.4){facDmRoar(F,1);facDmState(F,'chase');dm.mem={x:pl.x,y:pl.y,z:pl.z,t:F.t};break;}}
+      if(dm.sees>0&&!dm.crossSaw){dm.crossSaw=1;if(dist<9&&Math.random()<.2){facDmReveal(F,1.25);break;}}
       if(res==='there'||dm.stT>4.5){dm.on=false;dm.g.visible=false;facDmState(F,'away');D.awayT=8+Math.random()*7;}break;}
     case 'kill':break;
   }
   if(dm.st==='prowl'||dm.st==='inv'||dm.st==='search'){
-    /* sees you: a moment to react if you are far, none if you are close */
-    if(dm.sees>0){dm.alert=Math.min(1.2,(dm.alert||0)+dt*(dist<7?6:2.2)*dm.sees*(F.U.uPow.value<.3?1.4:1));if(dm.alert>=1){facDmRoar(F,1);facSting(F,.9);facDmState(F,'chase');dm.alert=0;}}
-    else dm.alert=Math.max(0,(dm.alert||0)-dt*.25);
-    if(dm.heard){dm.mem={x:dm.heard.x,y:dm.heard.y,z:dm.heard.z,t:F.t};const dd=Math.hypot(dm.heard.x-dm.x,dm.heard.z-dm.z);if(dm.heard.r>=30&&dd<16)facDmState(F,'chase');else if(dm.st!=='inv'){facDmState(F,'inv');facDmSniff(F);}}}
-  if(dm.st==='chase'&&dm.heard)dm.mem={x:dm.heard.x,y:dm.heard.y,z:dm.heard.z,t:F.t-1.3};
+    const canHunt=F.t>=(D.graceUntil||0)&&(F.t>=(D.recoverUntil||0)||dist<2.2);
+    if(dm.sees>0&&canHunt){
+      const before=dm.alert||0;dm.alert=Math.min(1.5,before+dt*(dist<7?1.1:.75)*dm.sees);
+      if(before<.25&&dm.alert>=.25&&F.t>=(dm.warnAt||0)){facTip(F,'It noticed you. Break line of sight.',2);dm.warnAt=F.t+10;}
+      if(dm.alert>=1.15){facDmRoar(F,1);facSting(F,.7);facDmState(F,'chase');dm.alert=0;}
+    }else dm.alert=Math.max(0,(dm.alert||0)-dt*.5);
+    // A sound gives a location to investigate, not permission to see through cover.
+    if(dm.heard&&dm.st!=='chase'&&dm.sees<=0){dm.mem={x:dm.heard.x,y:dm.heard.y,z:dm.heard.z,t:F.t};if(dm.st!=='inv'){facDmState(F,'inv');facDmSniff(F);}}
+  }
+  if(dm.st==='chase'&&dm.heard&&!dm.sees)dm.mem={x:dm.heard.x,y:dm.heard.y,z:dm.heard.z,t:F.t};
   if(dm.sees>0){D.lastSeen=F.t;}
   /* its body: turn, walk or run, footsteps */
   facDmBody(F,dt,spd>0&&res!=='there'&&res!=='bash'?spd:0);
-  /* caught */
-  if(dm.on&&(dm.st==='chase'||(dm.st==='reveal'&&dm.stT>.2)||dm.st==='stare')&&Math.hypot(dx,dz)<1.05&&Math.abs(pl.y-dm.y)<1.3&&!HZ.dead&&!HZ.won)facDie(F);
+  facDmCatch(F,dt);
 }
-function facDmReveal(F,t){const dm=F.dm;dm.on=true;dm.g.visible=true;dm.revT=t;facDmState(F,'reveal');facDmRoar(F,1.1);F.dir.lastChase=F.t;}
+function facDmCatch(F,dt){
+  const dm=F.dm,pl=F.pl;
+  const contact=dm.on&&dm.st==='chase'&&F.t>=(dm.safeUntil||0)&&!HZ.dead&&!HZ.won&&
+    Math.hypot(pl.x-dm.x,pl.z-dm.z)<.74&&Math.abs(pl.y-dm.y)<.85&&
+    facSee(F,dm.x,dm.y+1.35,dm.z,pl.x,pl.y+(pl.crouch?.9:1.35),pl.z,true);
+  if(!contact){dm.grabT=0;return;}
+  if(!dm.grabT)facTip(F,'Move! It is reaching for you.',1);
+  dm.grabT=(dm.grabT||0)+dt;if(dm.grabT>=.5)facDie(F);
+}
+function facDmReveal(F,t){const dm=F.dm;dm.on=true;dm.g.visible=true;dm.revT=Math.max(1.2,t||0);dm.mem={x:F.pl.x,y:F.pl.y,z:F.pl.z,t:F.t};facDmState(F,'reveal');facDmRoar(F,1);F.dir.lastChase=F.t;}
 function facDmProwlGoal(F){/* somewhere between it and you, drifting closer the longer you go unseen */
   const D=F.dir,pl=F.pl,dm=F.dm,press=clamp((F.t-Math.max(D.lastSeen,D.lastChase))/80,0,1)+(F.fuses*.15)+(D.final?1:0);
   const r=Math.max(3,18-press*13),p=facDmSpot(F,pl.x,pl.y,pl.z,Math.max(1,r*.4),r+4,false,40);return p||[pl.x,pl.y,pl.z];}
@@ -16034,6 +16053,7 @@ function facOnScreen(F,x,y,z){const v=F.tmpV||(F.tmpV=new T.Vector3());v.set(x,y
 /* ---------- the director: when it rests, when it stalks, when it ambushes you ---------- */
 function facDirector(F,dt){
   const D=F.dir,dm=F.dm,pl=F.pl;D.t+=dt;
+  if(F.t<(D.graceUntil||0)||F.t<(D.recoverUntil||0))return;
   /* a fuse was taken: it knows roughly where you are */
   if(D.alertAt>0&&F.t>=D.alertAt){D.alertAt=-1;if(dm.st==='away'){const p=facDmSpot(F,pl.x,pl.y,pl.z,16,28,true,60);if(p){facDmPlace(F,p[0],p[1],p[2]);dm.mem={x:pl.x,y:pl.y,z:pl.z,t:F.t};facDmState(F,'inv');}}
     else if(dm.st!=='chase'&&dm.st!=='reveal'){dm.mem={x:pl.x+(Math.random()-.5)*4,y:pl.y,z:pl.z+(Math.random()-.5)*4,t:F.t};facDmState(F,'inv');}facDmRoar(F,.6);}
@@ -16042,15 +16062,18 @@ function facDirector(F,dt){
       if(!facAmbush(F)){const p=facDmSpot(F,pl.x,pl.y,pl.z,18,30,true,60);if(p){facDmPlace(F,p[0],p[1],p[2]);facDmState(F,'prowl');}else D.awayT=2;}}}
   /* long quiet stretches end in an ambush */
   const quiet=F.t-Math.max(D.lastSeen,D.lastChase);
-  if((dm.st==='prowl'||dm.st==='search')&&quiet>D.ambT&&!facOnScreen(F,dm.x,dm.y+1.2,dm.z)){if(facAmbush(F))D.ambT=32+Math.random()*22;else D.ambT+=6;}
+  if((dm.st==='prowl'||dm.st==='search')&&quiet>D.ambT&&!facOnScreen(F,dm.x,dm.y+1.2,dm.z)){if(facAmbush(F))D.ambT=55+Math.random()*25;else D.ambT+=6;}
   /* after a chase you got away from, it may leave for a while: silence */
-  if(dm.st==='prowl'&&dm.stT>25&&quiet>40&&Math.random()<dt*.04&&!D.final&&!facOnScreen(F,dm.x,dm.y+1.2,dm.z)){dm.on=false;dm.g.visible=false;facDmState(F,'away');D.awayT=10+Math.random()*9;}
-  /* the end: it always knows where you are */
-  if(D.final){D.fT=(D.fT||0)-dt;if(D.fT<=0){D.fT=6;if(dm.st==='away'){const p=facDmSpot(F,pl.x,pl.y,pl.z,16,26,true,60);if(p){facDmPlace(F,p[0],p[1],p[2]);dm.mem={x:pl.x,y:pl.y,z:pl.z,t:F.t};facDmState(F,'inv');}}
-      else if(dm.st!=='chase'&&dm.st!=='reveal'&&dm.st!=='drop'&&dm.st!=='stare'){/* it hears roughly where you are */dm.mem={x:pl.x,y:pl.y,z:pl.z,t:F.t};facDmState(F,'inv');}}}
+  if(dm.st==='prowl'&&dm.stT>25&&quiet>40&&Math.random()<dt*.04&&!D.final&&!facOnScreen(F,dm.x,dm.y+1.2,dm.z)){dm.on=false;dm.g.visible=false;facDmState(F,'away');D.awayT=22+Math.random()*13;}
+  /* The final alarm draws it to the breaker, never to a hidden player's exact position. */
+  if(D.final){D.fT=(D.fT||0)-dt;if(D.fT<=0){D.fT=10;const B=F.W.breaker;
+    if(dm.st==='away'){const p=facDmSpot(F,pl.x,pl.y,pl.z,20,30,true,60);if(p){facDmPlace(F,p[0],p[1],p[2]);dm.mem={x:B.x,y:FCY[B.k],z:B.z,t:F.t};facDmState(F,'inv');}}
+    else if(dm.st==='prowl'||dm.st==='search'||dm.st==='inv'){dm.mem={x:B.x,y:FCY[B.k],z:B.z,t:F.t};facDmState(F,'inv');}
+  }}
 }
 /* set up a scare that the place itself explains: behind a door ahead, in a vent above, round a corner, on the floor above or below */
 function facAmbush(F){
+  if(F.t<(F.dir.graceUntil||0)||F.t<(F.dir.recoverUntil||0))return false;
   const pl=F.pl,dm=F.dm,yaw=pl.yaw,fx=-Math.sin(yaw),fz=-Math.cos(yaw),ahead=(x,z,a,b)=>{const vx=x-pl.x,vz=z-pl.z,d=Math.hypot(vx,vz);return d>=a&&d<=b&&(vx*fx+vz*fz)/d>.45;};
   const opts=[];
   for(const v of F.vents)if(!v.used&&v.k===facBand(pl.y+.1)&&ahead(v.x,v.z,6,15))opts.push(['vent',v]);
@@ -16074,8 +16097,8 @@ function facAmbush(F){
             if(Math.abs(Q[1]-M[1])<.3&&!facSee(F,pl.x,F.camY,pl.z,Q[0],Q[1]+1.2,Q[2],false)&&!facSee(F,pl.x,F.camY,pl.z,Q[0],Q[1]+.4,Q[2],false))return Q;}return null;};
         const A=side(1),B=side(-1);if(!A||!B)continue;if(!facWalkLine(F,A[0],A[1],A[2],M[0],M[1],M[2])||!facWalkLine(F,M[0],M[1],M[2],B[0],B[1],B[2]))continue;C=Math.random()<.5?[A,B]:[B,A];}
       if(!C)continue;facDmPlace(F,C[0][0],C[0][1],C[0][2],Math.atan2(C[1][0]-C[0][0],C[1][2]-C[0][2]));dm.cross=C[1];dm.crossSeen=0;dm.crossSaw=0;facDmState(F,'cross');F.quietT=1.2;return true;}
-    if(o[0]==='corner'){let p=null;for(let t=0;t<50&&!p;t++){const q=facDmSpot(F,pl.x,pl.y,pl.z,9,15,true,20);if(q&&Math.abs(q[1]-pl.y)<.6&&ahead(q[0],q[2],8,16))p=q;}
-      if(!p)continue;facDmPlace(F,p[0],p[1],p[2],Math.atan2(pl.x-p[0],pl.z-p[2]));dm.mem={x:pl.x,y:pl.y,z:pl.z,t:F.t};facDmState(F,'chase');F.quietT=2.5;facDmRoar(F,.9);facSting(F,.9);return true;}}
+    if(o[0]==='corner'){let p=null;for(let t=0;t<50&&!p;t++){const q=facDmSpot(F,pl.x,pl.y,pl.z,12,18,true,20);if(q&&Math.abs(q[1]-pl.y)<.6&&ahead(q[0],q[2],11,19))p=q;}
+      if(!p)continue;facDmPlace(F,p[0],p[1],p[2],Math.atan2(pl.x-p[0],pl.z-p[2]));facDmReveal(F,1.25);F.quietT=2.5;facSting(F,.7);return true;}}
   return false;
 }
 /* ---------- sound: the room, the ducts, the hum of the tubes, the radio on your belt, your heart, and the creature ---------- */
@@ -16271,12 +16294,11 @@ function facHauntInit(F){
   const bone=new T.MeshLambertMaterial({color:0x837d6a,emissive:0x16100b});
   const eye=new T.MeshBasicMaterial({color:0xd3f6e4});
   const red=new T.MeshBasicMaterial({color:0xb53c32});
-  const ghost=new T.MeshLambertMaterial({color:0x829b96,emissive:0x152723,transparent:true,opacity:.76,depthWrite:false});
   const sphere=new T.SphereGeometry(1,10,8),cyl=new T.CylinderGeometry(1,1,1,7),cone=new T.ConeGeometry(1,1,9);
   const mesh=(g,geo,mat,x,y,z,sx,sy,sz)=>{const m=new T.Mesh(geo,mat);m.position.set(x,y,z);m.scale.set(sx,sy,sz);g.add(m);return m;};
   const limb=(g,mat,a,b,r)=>{const m=mesh(g,cyl,mat,(a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2,r,Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2]),r);m.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),new T.Vector3(b[0]-a[0],b[1]-a[1],b[2]-a[2]).normalize());return m;};
   const make=kind=>{
-    const g=new T.Group(),joints=[];let spider=null;
+    const g=new T.Group(),joints=[];let spider=null,ghost=null;
     if(kind==='patient'){
       mesh(g,cone,gown,0,.9,0,.42,1.3,.3);
       mesh(g,sphere,skin,0,1.77,0,.18,.27,.18);
@@ -16292,39 +16314,27 @@ function facHauntInit(F){
     }else if(kind==='crawler'){
       spider=window.FacilitySpider.createActor();g.add(spider.visual);
     }else{
-      mesh(g,cone,ghost,0,1.1,0,.4,1.7,.31);
-      mesh(g,sphere,skin,0,2.08,.03,.17,.27,.18);
-      mesh(g,sphere,dark,0,2.06,.17,.125,.09,.04);
-      mesh(g,sphere,dark,0,1.9,.18,.065,.14,.04);
-      for(const s of[-1,1]){
-        mesh(g,sphere,eye,s*.065,2.09,.2,.02,.025,.012);
-        limb(g,ghost,[s*.26,1.7,0],[s*.55,.66,.1],.045);
-        for(let j=0;j<3;j++)limb(g,skin,[s*.55,.66,.1],[s*(.49+j*.06),.3,.24],.012);
-      }
+      ghost=window.FacilityGhost.createActor();g.add(ghost.visual);
     }
-    g.visible=false;F.scene.add(g);return{kind,g,joints,spider,radius:spider?spider.radius:.26,height:spider?spider.height:1.9,eye:spider?spider.eye:1.5,on:false,x:0,y:0,z:0,age:0,path:null};
+    g.visible=false;F.scene.add(g);return{kind,g,joints,spider,ghost,radius:spider?spider.radius:ghost?ghost.radius:.26,height:spider?spider.height:ghost?ghost.height:1.9,eye:spider?spider.eye:ghost?ghost.eye:1.5,on:false,x:0,y:0,z:0,age:0,path:null};
   };
-  F.haunt={actors:['patient','crawler','wraith'].map(make),active:null,next:10,seq:0,ambientAt:20,blackout:0,used:new Set(),mats:[skin,gown,dark,bone,eye,red,ghost],signMats:[],signTex:[],signs:[]};
-  /* Clear landmarks at eye height, readable in low light. */
+  F.haunt={actors:['patient','crawler','wraith'].map(make),active:null,next:20,seq:0,ambientAt:30,blackout:0,used:new Set(),mats:[skin,gown,dark,bone,eye,red],signMats:[],signTex:[],signs:[]};
+  /* Labels sit on solid wall headers, never in an opening or in mid-air. */
   for(const s of F.W.wingSigns||[]){
-    const c=document.createElement('canvas');c.width=768;c.height=160;
-    const x=c.getContext('2d');x.fillStyle='#081d22';x.fillRect(0,0,768,160);x.fillStyle=s.k===2?'#dc9863':'#93c8bd';x.fillRect(0,0,10,160);
-    x.font='bold 32px system-ui';x.fillText(s.text,30,68);x.font='18px system-ui';x.fillStyle='#a2aaa1';x.fillText(s.sub,30,112);
-    const tx=new T.CanvasTexture(c);tx.minFilter=T.LinearFilter;const mat=new T.MeshBasicMaterial({map:tx,color:0xb7c4be});
-    const m=new T.Mesh(new T.PlaneGeometry(1.9,.4),mat);m.position.set(s.x+s.nx*.025,FCY[s.k]+1.9,s.z+s.nz*.025);m.rotation.y=Math.atan2(s.nx,s.nz);m.userData.band=s.k;F.scene.add(m);
-    F.haunt.signs.push(m);F.haunt.signMats.push(mat);F.haunt.signTex.push(tx);
+    const sign=window.FacilitySigns.create(s,FCY[s.k],(x,y,z)=>facAir(F.W,x,y,z));if(!sign)continue;
+    F.scene.add(sign);F.haunt.signs.push(sign);F.haunt.signMats.push(...sign.userData.materials);F.haunt.signTex.push(...sign.userData.textures);
   }
 }
-function facHauntFree(F){return F.haunt&&!F.haunt.active&&F.t>=F.haunt.next&&F.stage==='find'&&F.dm.st!=='chase'&&F.dm.st!=='reveal'&&(!F.dm.on||F.dm.st==='away'||Math.hypot(F.dm.x-F.pl.x,F.dm.y-F.pl.y,F.dm.z-F.pl.z)>8);}
+function facHauntFree(F){return F.haunt&&!F.haunt.active&&F.t>=F.haunt.next&&F.t>=(F.dir?.recoverUntil||0)&&F.t-(F.dir?.lastChase||-99)>12&&F.stage==='find'&&F.dm.st!=='chase'&&F.dm.st!=='reveal'&&(!F.dm.on||F.dm.st==='away'||Math.hypot(F.dm.x-F.pl.x,F.dm.y-F.pl.y,F.dm.z-F.pl.z)>8);}
 function facHauntSpawn(F,kind,p,mode,door){
   const S=F.haunt,a=S.actors.find(a=>a.kind===kind);if(!a||S.active)return false;
   if(!p.every(Number.isFinite))return false;
   const pos={x:p[0],y:p[1],z:p[2]},r=a.radius||.26,h=a.height||1.9;
   if(facPush(F,pos,r,h,a.spider?.28:.4)>.16||facPush(F,{...pos},r-.004,h,a.spider?.28:.4)>.002)return false;
   const ground=facGround(F,pos.x,pos.z,pos.y,.35);if(!Number.isFinite(ground)||Math.abs(ground-pos.y)>.35)return false;pos.y=ground;
-  Object.assign(a,{x:pos.x,y:pos.y,z:pos.z,age:0,mode,door:door||null,on:true,revealed:mode!=='door',path:null,pi:0,repath:0,seen:0,stung:false,doorAt:0,stuck:0,life:mode==='hunt'?8:mode==='watch'?5:2.4});
-  if(a.spider)window.FacilitySpider.reset(a.spider);
-  a.g.position.set(a.x,a.y,a.z);a.g.rotation.y=Math.atan2(F.pl.x-a.x,F.pl.z-a.z);a.g.visible=a.revealed;S.active=a;S.next=F.t+24+Math.random()*14;return true;
+  Object.assign(a,{x:pos.x,y:pos.y,z:pos.z,age:0,mode,door:door||null,on:true,revealed:mode!=='door',path:null,pi:0,repath:0,seen:0,stung:false,doorAt:0,stuck:0,life:mode==='hunt'?6:mode==='watch'?5:2.4});
+  if(a.spider)window.FacilitySpider.reset(a.spider);if(a.ghost)window.FacilityGhost.reset(a.ghost);
+  a.g.position.set(a.x,a.y,a.z);a.g.rotation.y=Math.atan2(F.pl.x-a.x,F.pl.z-a.z);a.g.visible=a.revealed;S.active=a;S.next=F.t+38+Math.random()*18;return true;
 }
 function facHauntDoor(F,d,x,z){
   if(!F.pl||Math.hypot(x-F.pl.x,z-F.pl.z)>.1||!facHauntFree(F)||F.haunt.used.has(d))return;
@@ -16339,7 +16349,7 @@ function facHauntSting(F,a){
   facPS(F,a?a.x:F.pl.x,F.camY,a?a.z:F.pl.z,o=>{sfxT(o,62,28,.6,'sine',.35);sfxN(o,.36,.16,1250,'bandpass',0,1.4);sfxT(o,460,140,.5,'sawtooth',.06);},1);
   if(F.post&&meta.flash!==false)F.post.mat.uniforms.uHurt.value=Math.max(F.post.mat.uniforms.uHurt.value,.12);
 }
-function facHauntEnd(F){const S=F.haunt,a=S&&S.active;if(!a)return;a.on=false;a.g.visible=false;if(a.spider){a.spider.walk.paused=a.spider.run.paused=true;}S.active=null;S.next=Math.max(S.next,F.t+18);}
+function facHauntEnd(F){const S=F.haunt,a=S&&S.active;if(!a)return;a.on=false;a.g.visible=false;if(a.spider){a.spider.walk.paused=a.spider.run.paused=true;}S.active=null;S.next=Math.max(S.next,F.t+24);}
 function facHauntWalk(F,a,tx,ty,tz,speed,dt){
   a.repath-=dt;
   if(a.repath<=0){a.repath=.7;const s=facNodeNear(F,a.x,a.y,a.z),t=facNodeNear(F,tx,ty,tz);a.path=facPath(F,s,t,3000,true);a.pi=1;}
@@ -16378,10 +16388,10 @@ function facHauntTick(F,dt){
   const S=F.haunt;if(!S)return;const pl=F.pl;
   /* A single blackout beat or a slam/knock from a real nearby door. */
   if(S.blackout>0)S.blackout=Math.max(0,S.blackout-dt);
-  if(F.stage==='find')F.U.uPow.value=S.blackout>0?(S.blackout>1.7?.2:.5):1;
+  if(F.stage==='find')F.U.uPow.value=S.blackout>0?.5:1;
   const a=S.active;
   if(a){
-    if(F.dm.st==='chase'||F.stage!=='find'){facHauntEnd(F);return;}
+    if(F.dm.st==='chase'||F.dm.st==='reveal'||F.stage!=='find'){facHauntEnd(F);return;}
     const oldX=a.x,oldZ=a.z;a.age+=dt;
     if(!a.revealed){
       if(Math.abs(a.door.th)>.5&&facSee(F,pl.x,F.camY,pl.z,a.x,a.y+a.eye,a.z,false)){a.revealed=true;a.age=0;a.g.visible=true;facHauntSting(F,a);}
@@ -16390,29 +16400,30 @@ function facHauntTick(F,dt){
       const level=Math.abs(a.y-pl.y)<.65,dist=Math.hypot(a.x-pl.x,a.z-pl.z,(a.y-pl.y)*2),line=facSee(F,pl.x,F.camY,pl.z,a.x,a.y+a.eye,a.z,false),visible=facOnScreen(F,a.x,a.y+a.eye,a.z)&&line;
       if(a.mode==='watch'){
         a.g.rotation.y=Math.atan2(pl.x-a.x,pl.z-a.z);if(visible)a.seen+=dt;
-        else facHauntWalk(F,a,pl.x,pl.y,pl.z,1.6,dt);
+        else facHauntWalk(F,a,pl.x,pl.y,pl.z,1,dt);
         if(a.seen>.8||(level&&line&&dist<2)){facHauntSting(F,a);facHauntEnd(F);return;}
       }else if(a.mode==='cross'){
         facHauntWalk(F,a,a.to[0],a.to[1],a.to[2],6,dt);
         if(visible)facHauntSting(F,a);
       }else{
         if(visible&&a.age>.15)facHauntSting(F,a);
-        if(a.kind==='crawler'&&a.mode==='door'){a.life=7;a.mode='hunt';}
-        if(dist>1.25)facHauntWalk(F,a,pl.x,pl.y,pl.z,a.kind==='crawler'?3.9:4.8,dt);
+        if(a.kind==='crawler'&&a.mode==='door'){a.life=5;a.mode='hunt';}
+        if(dist>1.25)facHauntWalk(F,a,pl.x,pl.y,pl.z,a.kind==='crawler'?2.8:2.5,dt);
         if(level&&line&&dist<1.35){facHauntSting(F,a);a.age=Math.max(a.age,a.life-.3);}
       }
       if(a.age>a.life){facHauntEnd(F);return;}
     }
-    a.g.position.set(a.x,a.y+(a.spider?0:a.kind==='wraith'?.08+Math.sin(F.t*2.2)*.12:Math.sin(a.age*15)*.015),a.z);
+    a.g.position.set(a.x,a.y+(a.spider?0:a.kind==='wraith'?.06+Math.sin(F.t*2.2)*.045:Math.sin(a.age*15)*.015),a.z);
     if(a.spider)window.FacilitySpider.tick(a.spider,a.revealed?Math.hypot(a.x-oldX,a.z-oldZ)/Math.max(dt,.001):0,dt);
+    if(a.ghost)window.FacilityGhost.tick(a.ghost,a.revealed?Math.hypot(a.x-oldX,a.z-oldZ)/Math.max(dt,.001):0,dt,a.revealed?a.mode:'watch');
     for(let i=0;i<a.joints.length;i++)a.joints[i].rotation.z=Math.sin(a.age*(a.kind==='crawler'?16:7)+i*Math.PI)*.15;
   }
   if(F.t>S.ambientAt&&!S.active){
-    S.ambientAt=F.t+22+Math.random()*14;
-    if(F.dm.st!=='chase'&&F.stage==='find'){
+    S.ambientAt=F.t+35+Math.random()*15;
+    if(F.dm.st!=='chase'&&F.dm.st!=='reveal'&&F.t>=(F.dir?.recoverUntil||0)&&F.stage==='find'){
       const doors=F.doors.filter(d=>Math.abs(d.y-pl.y)<.4&&Math.hypot(d.cx-pl.x,d.cz-pl.z)>3&&Math.hypot(d.cx-pl.x,d.cz-pl.z)<10),d=doors[(Math.random()*doors.length)|0];
       if(d){if(Math.abs(d.th)>.9&&!facDoorHits(F,d,0,pl,.6)){facDoorClose(F,d,true);}else facSndBang(F,d,.75);}
-      if(Math.random()<.4)S.blackout=2;
+      if(Math.random()<.4)S.blackout=1.2;
     }
   }
   S.scan=(S.scan||0)-dt;
@@ -16433,7 +16444,7 @@ function facHauntTick(F,dt){
 }
 function facHauntDispose(F){
   const S=F.haunt;if(!S)return;
-  for(const a of S.actors){a.g.visible=false;if(a.spider)window.FacilitySpider.release(a.spider);}
+  for(const a of S.actors){a.g.visible=false;if(a.spider)window.FacilitySpider.release(a.spider);if(a.ghost)window.FacilityGhost.release(a.ghost);}
   for(const m of [...S.mats,...S.signMats])m.dispose();for(const t of S.signTex)t.dispose();F.haunt=null;
 }
 
@@ -16823,7 +16834,7 @@ function buildCoverProps(){
  mv(pH,['howto']);mv(pM,['mpbox','mpstat']);
  {const G=gmModes();pG.insertAdjacentHTML('beforeend','<div id="gmgrid">'+G.map(m=>'<button type="button" class="gmcard" data-gm="'+m.id+'"><span class="gmpic" style="background-image:url('+m.pic+')"><em>'+m.tag+'</em></span><b>'+m.t+'</b><small>'+m.d+'</small></button>').join('')+'</div>');
   pG.querySelectorAll('.gmcard').forEach(b=>b.addEventListener('click',()=>{try{sfx('key');}catch(e){}const id=b.dataset.gm;if(id==='classic')go('climb');else if(id==='horror')horStart('fac');else if(id==='hide')horStart('hide');}));}
- pK.insertAdjacentHTML('beforeend','<div id="mmcred"><p><b style="color:#ffd890">THE FACILITY</b></p><p>Explore three levels, restore power, and survive the creature stalking the facility.</p><p>Built in the browser with three.js. Music and sound are made live in Web Audio.</p><p>Find the fuses. Reach the lift. Escape.</p><p>Wolf Spider by <a href="https://sketchfab.com/DreamingInAlternation27" target="_blank" rel="noopener">Dreaming In Alternation 27</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. Textures optimized and model adapted for the game. <a href="CREDITS.md" target="_blank" rel="noopener">Full credits</a>.</p></div>');
+ pK.insertAdjacentHTML('beforeend','<div id="mmcred"><p><b style="color:#ffd890">THE FACILITY</b></p><p>Explore three levels, restore power, and survive the creature stalking the facility.</p><p>Built in the browser with three.js. Music and sound are made live in Web Audio.</p><p>Find the fuses. Reach the lift. Escape.</p><p>Wolf Spider by <a href="https://sketchfab.com/DreamingInAlternation27" target="_blank" rel="noopener">Dreaming In Alternation 27</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. Textures optimized and model adapted for the game. <a href="CREDITS.md" target="_blank" rel="noopener">Full credits</a>.</p><p>The Unvermeidlich ghost by <a href="https://sketchfab.com/Memorie" target="_blank" rel="noopener">Memorie</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. Textures optimized; original rig and animations retained.</p></div>');
  {const LOGV='3.16',UL=[
    ['3.16','19 Oct 2026',['The Facility now looks much more like the video it was made from: the concrete corridors glow a deep teal (even in the shadows), the walls are smooth plank-marked concrete instead of pitted, the floor tiles are bigger and glossier, and every tube light has a soft glow round it.','The yellow and red offices are brighter and warmer, with lighter stained ceilings and cleaner walls. Office doors are painted green with brass handles, roll-up metal shutters hang in the offices, the server racks are full of old coloured equipment, the generator room is lit red, and your flashlight is red.','It hunts harder: shorter quiet spells, earlier ambushes, and a new scare where it sprints across the corridor ahead of you. Sometimes it notices you and turns. When it comes round a corner at you, you hear it.','Running fixed: sprinting now reaches full speed in about a second (it used to creep up over four seconds, so it caught you while you were sprinting), and turning back while sprinting is a quick pivot instead of a wide arc. Walking into a closed door pushes it open (sprint into it to bang it open).','It no longer gets confused by the floor below: it used to think it had arrived when it walked under the place it was heading for.','Smoother on phones: the picture gets a little softer when the frame rate drops and sharper again when there is room, with fewer small hitches. Falling past a ledge can no longer clip you into its edge. The long objective hint fades after you have read it.']],
    ['3.15','18 Oct 2026',['Horror is now THE FACILITY: a dead research building on three levels, with cold cyan concrete corridors, yellow and red offices, a server hall, stairwells and a two-storey atrium. Find the three fuses (one on each level), put them in the breaker beside the freight lift in the basement, then stay alive until the lift arrives.','The demon hunts you by sight and sound. It opens and smashes doors, waits behind doors, drops out of ceiling vents, cuts you off round corners, jumps down from the gallery and climbs up through the broken floor. When the power fails at the end, only the red emergency lights are left.','You have a weak flashlight (the battery runs down, spare batteries lie around), stamina for sprinting, and heavy doors you can open, shut or slam in its face. Crouch in the dark behind crates with your light off and it may walk right past you.','New lighting for this mode: fluorescent tubes with real shadows, wet floors that reflect the lights, dusty light shafts, film grain and colour fringing. Smooth movement with weight: head bob, a lean when you turn, and a tilt when you are out of breath or scared.','Sound: a radio on your belt crackles louder as it gets closer, your heart speeds up, its footsteps come from where it really is and sound muffled behind walls, doors creak and slam, and the building groans in the distance.','Your touch layout (SPRINT, CROUCH, USE, LIGHT), controller, gyro, field of view and graphics settings work here too. Try again restarts straight away.']],
@@ -20203,7 +20214,9 @@ fixBar();buildTitleLevel();resize();requestAnimationFrame(frame);
   document.getElementById('ro-skip').addEventListener('click',dismiss);
 })();
 </script>
-<script src="assets/horror/spider.js?v=wolf-spider-r1-20261020"></script>
+<script src="assets/horror/spider.js?v=ghost-signs-r1-20261020"></script>
+<script src="assets/horror/ghost.js?v=ghost-signs-r1-20261020"></script>
+<script src="assets/horror/signs.js?v=ghost-signs-r1-20261020"></script>
 <script id="facility-direct-entry">
 (function(){
   let tries=0,done=false;
