@@ -18,3 +18,7 @@ Model by **Memorie**: https://sketchfab.com/Memorie
 - License: Creative Commons Attribution 4.0 International (CC BY 4.0), https://creativecommons.org/licenses/by/4.0/
 
 The game uses the ghost supplied by the user. Body and dress albedo textures were encoded as JPEG; PBR maps were resized to 512 pixels (hair normal: 256 pixels). The hair albedo and its alpha channel are preserved. Mesh geometry, the 70-joint skin and all four native stalking/chasing animation clips are unchanged. Parent transforms normalize animated height to 2.05 m and cancel horizontal root motion so the model follows collision-controlled movement. Materials are adjusted for the facility lighting. No endorsement by the original artist is implied.
+
+## Multiplayer client
+
+PeerJS 1.5.5, copyright PeerJS contributors, MIT License. The pinned browser bundle is included in `assets/vendor/peerjs-1.5.5.min.js`; its license is in `assets/vendor/peerjs-LICENSE`. Source: https://github.com/peers/peerjs.

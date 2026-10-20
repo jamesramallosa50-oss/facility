@@ -19,14 +19,16 @@ function section(start,end){const i=core.indexOf(start),j=core.indexOf(end,i);as
 const threeCtx={};vm.createContext(threeCtx);vm.runInContext(three,threeCtx);
 const T=threeCtx.THREE;
 function harness(buildGeometry=false){
-  const ctx={T,console,performance,Float32Array,Uint8Array,Int8Array,Int16Array,Int32Array,Uint32Array,Map,Set,Math,Promise,setTimeout,
-    document:{createElement:()=>({getContext:()=>({font:'',fillRect(){},strokeRect(){},fillText(){},save(){},restore(){},translate(){},rotate(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},measureText(t){return{width:t.length*(parseFloat(this.font.match(/([0-9]+)px/)?.[1])||25)*.58};}})})},
+  const ctx={T,console,performance,Float32Array,Uint8Array,Int8Array,Int16Array,Int32Array,Uint32Array,Map,Set,Math,Promise,setTimeout,clearTimeout,URL,URLSearchParams,addEventListener(){},location:{search:''},
+    document:{getElementById:()=>null,createElement:()=>({getContext:()=>({font:'',fillRect(){},strokeRect(){},fillText(){},save(){},restore(){},translate(){},rotate(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},measureText(t){return{width:t.length*(parseFloat(this.font.match(/([0-9]+)px/)?.[1])||25)*.58};}})})},
     keys:{},touchMove:{x:0,y:0},padMove:{x:0,y:0},padRun:false,firing:false,HZ:{},meta:{flash:false},
     sens:()=>1,clamp:(x,a,b)=>Math.max(a,Math.min(b,x)),vib:()=>{},
-    facSndGasp(){},facSndStep(){},facSndLand(){},facSndClick(){},facSndCreak(){},facSndSlam(){},facSndBump(){},facSndBang(){},facSndLatch(){},facSndRattle(){},facDmRoar(){},facDmSniff(){},facDmBreath(){},facDie(){ctx.HZ.dead=true;},facSting(){},facPS(){},sfxT(){},sfxN(){},facTip(){},
+    facSndGasp(){},facSndStep(){},facSndLand(){},facSndClick(){},facSndCreak(){},facSndSlam(){},facSndBump(){},facSndBang(){},facSndLatch(){},facSndRattle(){},facSndPick(){},facSndPlug(){},facSndAlarm(){},facSndBell(){},facSay(){},facDmRoar(){},facDmSniff(){},facDmBreath(){},facDie(){ctx.HZ.dead=true;},facWin(){ctx.HZ.won=true;},facSting(){},facPS(){},sfxT(){},sfxN(){},facTip(){},
   };
   ctx.THREE=T;ctx.window=ctx;
   vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(path.join(root,'assets/facility-survival.js'),'utf8'),ctx);
+  vm.runInContext(fs.readFileSync(path.join(root,'assets/facility-coop.js'),'utf8'),ctx);
   vm.runInContext(spiderRuntime,ctx);vm.runInContext(ghostRuntime,ctx);vm.runInContext(signRuntime,ctx);
   const model=new T.Group();model.add(new T.Mesh(new T.BoxGeometry(1,.3,1),new T.MeshStandardMaterial()));
   ctx.FacilitySpider.prepare({scene:model,animations:[new T.AnimationClip('Spider walking',1,[]),new T.AnimationClip('Spider running',.3,[])]});
@@ -37,17 +39,21 @@ function harness(buildGeometry=false){
     section('function facDoorGeo(F,M,d)','/* ===== BUILD 3.15: THE FACILITY — part 4:')+
     section('const FAC=','let FACW=')+
     section('const FDM=','/* ---------- sound:')+
-    section('function facPlayer(F,dt)','/* ---------- looking at things you can use')+
+    section('function facNoise(F','/* ---------- looking at things you can use')+
+    section('function facLook(F)','/* ---------- the creature ---------- */')+
     section('const FSP=','/* ---------- each frame ---------- */');
-  vm.runInContext(code+'\nglobalThis.api={facPlan,facGrid,facNav,facNodeNear,facNP,facPath,facMove,facPush,facPlayer,facGround,facDoorSeg,facDoorDistance,facDoorSweep,facDoorsInit,facDoorsTick,facDoorOpen,facHauntInit,facHauntDoor,facHauntWalk,facHauntTick,facHauntEnd,facHauntFree,facHauntSpawn,facHauntDispose,facHauntClear,facSpiderPursue,facDmCatch,facDmState,facDmReveal,facDmPlace,facDemonTick,facDirector,facDmSee,facWallLightMount,facWallLightGeo,facGeomLights,facLightsPrep,FDM,facGeomAll,facBake,FAC,FCY,FNX,FNZ};',ctx);
-  vm.runInContext('facDoorGeo=()=>({rotation:{y:0}});facLook=()=>{};facUse=()=>{};',ctx);
+  vm.runInContext(code+'\nglobalThis.api={facPlan,facGrid,facNav,facNodeNear,facNP,facPath,facMove,facPush,facPlayer,facGround,facDoorSeg,facDoorDistance,facDoorSweep,facDoorsInit,facDoorsTick,facDoorOpen,facHauntInit,facHauntDoor,facHauntWalk,facHauntTick,facHauntEnd,facHauntFree,facHauntSpawn,facHauntDispose,facHauntClear,facSpiderPursue,facDmCatch,facDmState,facDmReveal,facDmPlace,facDmGo,facDemonTick,facDirector,facDmSee,facWallLightMount,facWallLightGeo,facGeomLights,facLightsPrep,FDM,facGeomAll,facBake,FAC,FCY,FNX,FNZ,facHealthInit,facDamage,facHealthTick,facRevive,facHuntTarget,facPlayers,facNetRandom,facNetInput,facNetAction,facNetSnapshot,facNetWorld,facNetQueue,facCoopUse,facCoopConfig,facNetValidPose};',ctx);
+  vm.runInContext('facDoorGeo=()=>({rotation:{y:0}});facLook=()=>{};',ctx);
+  Object.assign(ctx.api,{facCoopStart:ctx.facCoopStart,facCoopTick:ctx.facCoopTick,facCoopDispose:ctx.facCoopDispose,facItems:ctx.facItems});
   const A=ctx.api,W=A.facPlan();A.facGrid(W);if(buildGeometry)A.facGeomAll(W);
   const F={W,doors:[],scene:new T.Scene(),t:20,noise:[],dm:{x:2,y:4,z:2,on:false,vis:false,st:'away'},stage:'find',fuses:0,dir:{t:0,lastChase:0,lastSeen:0,recoverUntil:0,graceUntil:0},camY:5.62,U:{uPow:{value:1},uEmg:{value:1}},pl:{x:11,y:4,z:8.2,yaw:0,pitch:0,vx:0,vz:0,vy:0,ground:true,sta:1,bat:1,light:true,crouch:false,bob:0,bobA:0,roll:0,ch:1.62,fear:0}};
   A.facNav(F);ctx.HZ={pl:F.pl,padHold:false};ctx.cam=new T.PerspectiveCamera();
+  A.facHealthInit(F);
   return{ctx,A,F,W};
 }
 const shared=harness(true);
 test('every inline script parses, including launch entry points',()=>{
+  for(const file of ['facility-survival.js','facility-coop.js','facility-menu.js'])new vm.Script(fs.readFileSync(path.join(root,'assets',file),'utf8'),{filename:file});
   for(const [name,code] of [['spider',spiderRuntime],['ghost',ghostRuntime],['signs',signRuntime]])new vm.Script(code,{filename:'assets/horror/'+name+'.js'});
   for(const file of ['game-core.html','game.html','index.html']){
     const h=fs.readFileSync(path.join(root,file),'utf8');
@@ -215,15 +221,16 @@ test('hunter recognition gives a warning and noise alone never starts a chase',(
   A.facDmState(F,'prowl');F.dm.alert=0;ctx.facDmSee=()=>0;ctx.facDmHear=()=>({x:12,y:4,z:3,r:80});
   for(let i=0;i<10;i++){F.t+=.05;A.facDemonTick(F,.05);}assert.equal(F.dm.st,'inv','Loud noises should trigger investigation');
 });
-test('hunter loses visual tracking behind cover, tires on long chases, and rests after escape',()=>{
+test('hunter loses visual tracking behind cover, maintains chase pressure, and rests after escape',()=>{
   const {ctx,A,F}=hunter();F.fuses=3;F.dir.final=true;A.facDmState(F,'chase');F.dm.stT=2;F.dm.mem={x:12,y:4,z:9,t:F.t};ctx.facDmSee=()=>0;
   F.pl.x=40;F.pl.z=30;F.t+=.5;A.facDemonTick(F,.05);
   assert.equal(F.lastGoal.x,12,'Should visit the last known position instead of tracking through walls');assert(F.lastGoal.speed<5.9);
-  F.dm.stT=8.1;F.dm.lastVisual=F.t;A.facDemonTick(F,.05);assert(F.lastGoal.speed<A.FAC.walk,'Tired hunter should be escapable at walking speed');
+  F.dm.stT=8.1;F.dm.lastVisual=F.t;A.facDemonTick(F,.05);assert(F.lastGoal.speed>A.FAC.walk&&F.lastGoal.speed<A.FAC.run,'Hunter must keep closing on walking but allow sprint escape');
+  F.dm.stT=20;A.facDemonTick(F,.05);assert(F.lastGoal.speed>A.FAC.walk,'Long chases should not slow the hunter below walking');
   F.t+=4.1;A.facDemonTick(F,.05);assert.equal(F.dm.st,'search');assert(F.dir.recoverUntil>=F.t+14);
   const before=F.dm.alert;ctx.facDmSee=()=>1;F.t+=.1;A.facDemonTick(F,.05);assert(F.dm.alert<=before,'Recovery should stop an immediate repeat chase');
 });
-test('a hunter grab needs sustained visible contact and respects closed doors, floors and reaction time',()=>{
+test('hunter attacks need sustained visible contact, deal health damage, and respect reaction time',()=>{
   const {ctx,A,F}=hunter();F.dm.st='chase';F.dm.z=F.pl.z-.65;ctx.facSee=()=>false;
   for(let i=0;i<20;i++)A.facDmCatch(F,.05);assert(!ctx.HZ.dead,'A closed door or wall must block a grab');
   ctx.facSee=()=>true;F.dm.y=0;for(let i=0;i<20;i++)A.facDmCatch(F,.05);assert(!ctx.HZ.dead,'Another floor must block a grab');F.dm.y=F.pl.y;
@@ -231,7 +238,8 @@ test('a hunter grab needs sustained visible contact and respects closed doors, f
   F.dm.st='chase';F.dm.safeUntil=F.t+1.2;for(let i=0;i<20;i++)A.facDmCatch(F,.05);assert(!ctx.HZ.dead,'Reaction window must prevent a grab');F.dm.safeUntil=0;
   for(let i=0;i<8;i++)A.facDmCatch(F,.05);assert(!ctx.HZ.dead,'Brief contact should be escapable');
   F.dm.z-=1;A.facDmCatch(F,.05);assert.equal(F.dm.grabT,0);F.dm.z=F.pl.z-.65;
-  for(let i=0;i<11;i++)A.facDmCatch(F,.05);assert(ctx.HZ.dead,'Sustained visible contact should still be dangerous');
+  for(let i=0;i<11;i++)A.facDmCatch(F,.05);assert.equal(F.pl.hp,72,'Sustained contact should damage health');assert(!ctx.HZ.dead);
+  for(let i=0;i<30;i++)A.facDmCatch(F,.05);assert.equal(F.pl.hp,72,'One collision must not drain every health point');
 });
 test('final alarm targets the breaker rather than a hidden player',()=>{
   const {ctx,A,F}=hunter();F.dir.final=true;F.dm.st='prowl';F.dm.stT=0;ctx.facOnScreen=()=>true;F.dir.ambT=1000;
@@ -241,7 +249,7 @@ test('the real closed door leaf blocks a grab and opening it restores line of si
   const {ctx,A,F}=hunter();F.dm.st='chase';F.dm.x=48.93;F.dm.z=21.75;F.pl.x=49.57;F.pl.z=21.75;
   const door={hx:49.25,hz:21.02,y:4,w:1.46,a0:Math.PI/2,th:0,tgt:0};F.doors=[door];
   for(let i=0;i<15;i++)A.facDmCatch(F,.05);assert(!ctx.HZ.dead);assert.equal(F.dm.grabT,0);
-  door.th=-Math.PI/2;for(let i=0;i<11;i++)A.facDmCatch(F,.05);assert(ctx.HZ.dead,'Opening the door should restore visible physical contact');
+  door.th=-Math.PI/2;for(let i=0;i<11;i++)A.facDmCatch(F,.05);assert.equal(F.pl.hp,72,'Opening the door should restore visible physical contact');assert(!ctx.HZ.dead);
 });
 test('the opening grace period prevents detection and director ambushes',()=>{
   const {ctx,A,F}=hunter();F.dir.graceUntil=F.t+35;F.dir.alertAt=F.t;F.dir.ambT=0;F.dm.stT=0;
@@ -317,10 +325,10 @@ test('all six marked spider doors can still prime the enlarged creature',()=>{
 });
 
 test('the spider gives a reaction window and keeps closing on a walking player beyond six seconds',()=>{
-  const {A,F}=harness();A.facHauntInit(F);F.pl.x=47.75;F.pl.y=4;F.pl.z=10;F.camY=5.62;
+  const {A,F}=harness();A.facHauntInit(F);F.pl.x=47.75;F.pl.y=4;F.pl.z=16;F.camY=5.62;
   assert(A.facHauntSpawn(F,'crawler',[47.75,4,6],'hunt'));const spider=F.haunt.active;
   for(let i=1;i<=160;i++){
-    const t=i*.05;F.t+=.05;F.pl.z=10+3.15*t;A.facHauntTick(F,.05);
+    const t=i*.05;F.t+=.05;F.pl.z=16+3.15*t;A.facHauntTick(F,.05);
     if(i===12)assert(Math.abs(spider.z-6)<.001,'Initial warning should allow time to react');
   }
   assert(F.haunt.active===spider,'A real pursuit should last longer than the former six-second scare');
@@ -360,4 +368,104 @@ test('a sprinting player gains distance from the spider',()=>{
   assert(A.facHauntSpawn(F,'crawler',[47.75,4,6],'hunt'));const spider=F.haunt.active;
   for(let i=1;i<=80;i++){F.t+=.05;F.pl.z=10+5.9*i*.05;A.facHauntTick(F,.05);}
   assert(F.pl.z-spider.z>10,'Sprinting should provide a fair escape');A.facHauntDispose(F);
+});
+
+test('health survives three hunter hits, ignores repeated contact, and only recovers out of danger',()=>{
+  const {A,F,ctx}=harness();
+  for(let i=0;i<3;i++){
+    F.t+=2;assert(A.facDamage(F,F.pl,28));assert(!A.facDamage(F,F.pl,28),'Damage cooldown must prevent per-frame damage');
+  }
+  assert.equal(F.pl.hp,16);assert(!ctx.HZ.dead);
+  F.t+=13;F.dm.st='chase';A.facHealthTick(F,1);assert.equal(F.pl.hp,16,'No recovery while being hunted');
+  F.dm.st='prowl';A.facHealthTick(F,1);assert.equal(F.pl.hp,20);
+  F.t+=2;A.facDamage(F,F.pl,28);assert.equal(F.pl.hp,0);assert(ctx.HZ.dead);
+});
+test('a downed teammate can be revived nearby but not through a wall, and the whole team can lose',()=>{
+  const {A,F,ctx}=harness();ctx.facSee=()=>true;
+  const other={...F.pl,netId:'friend',name:'Friend',x:F.pl.x+.7,hp:20};
+  F.coop={host:true,players:new Map([['friend',other]])};A.facDamage(F,other,28);
+  assert(other.downed);assert(!ctx.HZ.dead);A.facHealthTick(F,.1);assert(!F.coop.outcome);
+  ctx.facSee=()=>false;assert.equal(A.facRevive(F,F.pl,other),false);
+  ctx.facSee=()=>true;assert(A.facRevive(F,F.pl,other));assert.equal(other.hp,40);assert(!other.downed);
+  assert.equal(A.facDamage(F,other,28),false,'Revival grants a short escape window');
+  other.downed=true;F.pl.hp=0;F.pl.downed=true;A.facHealthTick(F,.1);assert.equal(F.coop.outcome,'lost');
+});
+test('the hunter can choose a guest, keeps the last target behind cover, and skips downed players',()=>{
+  const {A,F,ctx}=hunter();const guest={...F.pl,netId:'guest',x:F.dm.x+.5,y:4,z:F.dm.z,hp:100};
+  F.coop={host:true,players:new Map([['guest',guest]])};ctx.facDmSee=(F,p)=>p===guest?1:0;
+  assert.equal(A.facHuntTarget(F),guest);ctx.facDmSee=()=>0;assert.equal(A.facHuntTarget(F),guest);
+  guest.downed=true;assert.equal(A.facHuntTarget(F),F.pl);
+  F.coop.host=false;assert.equal(A.facDamage(F,F.pl,28),false,'Guests cannot run a second damage simulation');
+});
+test('the hunter takes a direct clear capsule route and recovers an invalid detached body',()=>{
+  const {A,F,ctx}=harness();Object.assign(F.dm,{x:47.75,y:4,z:10,st:'chase',g:new T.Group(),on:true,t:0,stT:2});
+  const start=F.dm.z;
+  for(let i=0;i<60;i++)A.facDmGo(F,47.75,4,25,A.FDM.chase,1/60);
+  assert(F.dm.z-start>4.4,'Grid waypoints must not waste the configured chase speed');
+  F.dm.x=NaN;F.dm.y=-100;ctx.facDmBody=()=>{};ctx.facDmSee=()=>0;ctx.facDmHear=()=>null;ctx.facDmGo=()=> 'move';
+  A.facDemonTick(F,.05);assert([F.dm.x,F.dm.y,F.dm.z].every(Number.isFinite));assert.equal(F.dm.g.parent,F.scene);
+});
+test('room parameters survive the game loader and asset updates invalidate old gameplay caches',()=>{
+  const location={href:'https://example.test/game.html?coop=join&room=ABC234&name=Kai',search:'?coop=join&room=ABC234&name=Kai',replace(v){this.redirect=v;}},link={};
+  const script=[...fs.readFileSync(path.join(root,'game.html'),'utf8').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)][0][1];
+  vm.runInNewContext(script,{URL,location,document:{getElementById:()=>link}});const u=new URL(location.redirect);
+  assert.equal(u.searchParams.get('room'),'ABC234');assert.equal(u.searchParams.get('coop'),'join');assert.equal(u.searchParams.get('name'),'Kai');assert.equal(u.searchParams.get('facility'),'1');
+  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-coop-survival-r1-20261021'));assert(!sw.includes("pathname.includes('/assets/')"));
+  const code=fs.readFileSync(path.join(root,'index.html'),'utf8');assert(code.includes('PLAY CO-OP'));assert(code.includes('facility-menu.js'));assert(html.includes('assets/facility-coop.js'));
+});
+
+function coopWorld(h,mode='host'){
+  const {A,F,ctx}=h;ctx.location.search='?coop='+mode+'&room=ABC234&name='+mode;
+  A.facCoopConfig(F);F.pl.netId='local';F.dm.g=new T.Group();Object.assign(F.dm,{x:20,y:4,z:3,face:0,st:'away',on:false});
+  F.U.uEmg={value:1};F.held=0;F.fuses=0;F.fz=[{x:11,y:5.3,z:8.3,got:false,m:new T.Mesh(),gl:new T.Sprite()}];F.bats=[{x:11,y:5.3,z:8.3,got:false,m:new T.Mesh()}];
+  F.brk={x:11,y:5.3,z:8.3,n:0,sockets:[new T.Mesh(),new T.Mesh(),new T.Mesh()]};
+  F.lift={open:0,want:0,arrive:-1,box:{off:false},doors:[]};
+  ctx.facNetScreen=()=>{};ctx.facDmBody=()=>{};ctx.facSee=()=>true;ctx.facOnScreen=()=>false;return h;
+}
+test('co-op requests are idempotent, range checked, bounded, and cannot forge health',()=>{
+  const {A,F,ctx}=coopWorld(harness());const p={...F.pl,netId:'guest',ack:0,loading:false,name:'Guest'};F.coop.id='host';F.coop.players.set('guest',p);
+  const conn={peer:'guest'},input={type:'input',version:1,pose:{...p,yaw:0,pitch:0,hp:999},actions:[{id:1,t:'fuse',i:0}]};
+  A.facNetInput(F,conn,input);A.facNetInput(F,conn,input);assert.equal(F.fuses,1);assert.equal(F.held,1);assert.equal(p.hp,100);assert(F.fz[0].got);
+  A.facNetInput(F,conn,{...input,actions:[{id:2,t:'brk'}]});assert.equal(F.brk.n,1);assert.equal(F.held,0);
+  A.facNetInput(F,conn,{...input,actions:[{id:2,t:'brk'}]});assert.equal(F.brk.n,1);
+  A.facNetInput(F,conn,{...input,pose:{...p,x:NaN},actions:[]});assert(Number.isFinite(p.x));
+  p.x=60;A.facNetAction(F,p,{t:'bat',i:0});assert(!F.bats[0].got,'A distant player cannot collect an item');
+  p.x=11;A.facNetAction(F,p,{t:'bat',i:0});A.facNetAction(F,p,{t:'bat',i:0});assert.equal(p.batteryPicks,1,'One shared battery can only be picked once');
+});
+test('host snapshots synchronize a late join, health, doors and pickups without trusting guest world state',()=>{
+  const host=coopWorld(harness()),guest=coopWorld(harness(),'join');host.F.coop.id='host';guest.F.coop.id='guest';
+  const p={...host.F.pl,netId:'guest',name:'Guest',hp:72,hit:1,ack:2,batteryPicks:1};host.F.coop.players.set('guest',p);guest.F.coop.actions=[{id:1},{id:2},{id:3}];
+  host.A.facDoorsInit(host.F,{});guest.A.facDoorsInit(guest.F,{});host.F.doors[0].th=.6;host.F.doors[0].tgt=1.58;
+  host.F.fz[0].got=true;host.F.fuses=host.F.held=1;guest.F.pl.bat=.2;
+  guest.A.facNetWorld(guest.F,host.A.facNetSnapshot(host.F));
+  assert(guest.F.coop.ready);assert.equal(guest.F.pl.hp,72);assert.equal(guest.F.pl.bat,.7);assert.equal(guest.F.fuses,1);assert(guest.F.fz[0].got);assert.equal(guest.F.doors[0].th,.6);assert.equal(guest.F.coop.actions.length,1);assert(guest.F.coop.players.has('host'));
+  guest.A.facNetWorld(guest.F,host.A.facNetSnapshot(host.F));assert.equal(guest.F.pl.bat,.7,'Repeated snapshots cannot duplicate a battery');
+});
+
+test('four separate clients create/join a room, exchange real protocol packets, and reject a fifth',async t=>{
+  // In-memory transport exercises the actual room protocol, not browser ICE/NAT.
+  const {EventEmitter}=require('node:events'),peers=new Map();let serial=0;
+  class Connection extends EventEmitter{
+    constructor(peer,metadata){super();this.peer=peer;this.metadata=metadata;this.open=false;this.bufferSize=0;}
+    send(data){if(!this.open)throw Error('closed');const packet=JSON.parse(JSON.stringify(data));queueMicrotask(()=>this.other.emit('data',packet));}
+    close(){if(!this.open)return;this.open=false;this.other.open=false;this.emit('close');this.other.emit('close');}
+  }
+  class Peer extends EventEmitter{
+    constructor(id){super();this.id=id||'guest-'+(++serial);this.connections=[];if(peers.has(this.id)){queueMicrotask(()=>this.emit('error',{type:'unavailable-id'}));return;}peers.set(this.id,this);queueMicrotask(()=>this.emit('open',this.id));}
+    connect(id,options){const remote=peers.get(id),a=new Connection(id,options.metadata),b=new Connection(this.id,options.metadata);a.other=b;b.other=a;this.connections.push(a);remote.connections.push(b);queueMicrotask(()=>{remote.emit('connection',b);a.open=b.open=true;a.emit('open');b.emit('open');});return a;}
+    destroy(){this.destroyed=true;for(const c of this.connections)c.close();peers.delete(this.id);}
+  }
+  const host=coopWorld(harness()),guests=[coopWorld(harness(),'join'),coopWorld(harness(),'join'),coopWorld(harness(),'join')],all=[host,...guests];
+  t.after(()=>all.forEach(h=>h.A.facCoopDispose(h.F)));
+  for(const h of all)h.ctx.Peer=Peer;
+  const flush=()=>new Promise(resolve=>setImmediate(resolve));
+  await host.A.facCoopStart(host.F);await flush();assert(host.F.coop.ready);
+  for(const g of guests){await g.A.facCoopStart(g.F);await flush();assert(g.F.coop.ready);}
+  assert.equal(host.F.coop.players.size,3);
+  guests[0].A.facNetQueue(guests[0].F,{t:'fuse',i:0});guests[0].A.facCoopTick(guests[0].F,.05);await flush();assert.equal(host.F.fuses,1);
+  host.F.coop.sendAt=0;host.A.facCoopTick(host.F,.05);await flush();
+  for(const g of guests){assert.equal(g.F.fuses,1);assert.equal(g.F.coop.players.size,3);}
+  const fifth=coopWorld(harness(),'join');fifth.ctx.Peer=Peer;all.push(fifth);await fifth.A.facCoopStart(fifth.F);await flush();assert.match(fifth.F.coop.error,/full/);assert.equal(host.F.coop.players.size,3);
+  guests[0].A.facCoopDispose(guests[0].F);assert.equal(host.F.coop.players.size,2);
+  host.A.facCoopDispose(host.F);assert.match(guests[1].F.coop.error,/host disconnected/i);
 });
