@@ -253,3 +253,19 @@ test('the active entry pages cannot load retired ghosts or select humanoid scare
   for(const name of ['index.html','game.html','sw.js'])assert(!fs.readFileSync(path.join(root,name),'utf8').includes('ghost.js'));
   assert(!html.includes('assets/horror/ghost.js'));assert(!html.includes('unvermeidlich-ghost.glb'));
 });
+
+test('wall panels stay clear of structural wall textures on every floor',()=>{
+  const {ctx,W}=shared,{verticalRect,overlaps}=require('./helpers/surface-geometry.cjs'),walls=[],props=[],B=ctx.facBuilder();let list=walls;
+  B.quad=(...args)=>{const r=verticalRect(...args);if(r)list.push(r);};
+  ctx.facGeomWorld(W,B);list=props;ctx.facGeomProps(W,B);
+  assert(walls.length>10000&&props.length>1000,'Check the complete generated building');
+  const hits=overlaps(walls,props,.008);
+  assert.equal(hits.length,0,'Wall props compete with the structure: '+JSON.stringify(hits.slice(0,2)));
+});
+test('door jambs and lintels meet without overlapping their textured faces',()=>{
+  const {ctx,W}=shared,{verticalRect,overlaps}=require('./helpers/surface-geometry.cjs'),rects=[];
+  ctx.facGeomFrames(W,{quad(...args){const r=verticalRect(...args);if(r)rects.push(r);}});
+  assert(rects.length>500,'Check all door frames, including stacked east-wing doors');
+  const hits=overlaps(rects);
+  assert.equal(hits.length,0,'Overlapping door trim: '+JSON.stringify(hits.slice(0,2)));
+});

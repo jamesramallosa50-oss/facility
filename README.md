@@ -27,6 +27,8 @@ Controls:
 - Sprint reserve: 30 seconds; recovery begins after 0.35 seconds, with a full refill taking about 3 seconds standing or 4.5 seconds walking.
 - E / USE: doors, fuses, batteries, breaker. F / LIGHT: flashlight. C / CROUCH: crouch.
 
+Wall texture flicker is fixed at the source: wall panels sit 18 mm clear of the structural wall instead of sharing its exact depth. Door jambs meet the lintel at 2.3 m without overlapping their front surfaces. This prevents competing wall/panel textures and bright patches around the top corners of doorways as the camera moves. No global depth bias is applied to hide geometry problems.
+
 Door visuals now match their physical angles from initialization through settling. Collision checks sweep the full capsule movement, including fallback slides, against the physical leaf at every angle. Navigation assigns doors to the correct floor. Gameplay changes are integrated into `game-core.html`; the entry pages no longer depend on runtime string replacements or injected patches.
 
-Run `node --test tests/facility-regression.test.cjs` for parsing, route accessibility with railings, door collision and angle consistency, floor-specific door navigation, joystick/stamina behavior and encounter lifecycle, sign mounting, supported emergency light fixtures, ghost removal and hunter detection/contact checks. Rendering and physical touch responsiveness still require browser/device playtesting.
+Run `node --test tests/facility-regression.test.cjs` for parsing, route accessibility with railings, door collision and angle consistency, floor-specific door navigation, joystick/stamina behavior and encounter lifecycle, sign mounting, supported emergency light fixtures, ghost removal, wall/panel depth separation, non-overlapping door trim and hunter detection/contact checks. Rendering and physical touch responsiveness still require browser/device playtesting.

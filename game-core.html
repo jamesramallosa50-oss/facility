@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>The Facility — East Wing</title>
-<meta name="facility-build" content="lamp-fix-r2-20261020">
+<meta name="facility-build" content="wall-textures-r1-20261020">
 <meta name="theme-color" content="#060807">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="mobile-web-app-capable" content="yes">
@@ -14677,7 +14677,9 @@ function facProps(W){
   const papers=(k,x,z,n,rad)=>{for(let i=0;i<n;i++){const a=rr(0,6.283),d=(rad||.8)*Math.sqrt(R());bx(x+Math.cos(a)*d,Y(k)+.003+i*.0015,z+Math.sin(a)*d,.21,.002,.29,0,'paper',{rot:rr(0,3),flat:1});}};
   const cable=(k,x0,z0,x1,z1)=>{const n=Math.max(2,Math.round(Math.hypot(x1-x0,z1-z0)/.6));let px=x0,pz=z0;for(let i=1;i<=n;i++){const t=i/n,nx=x0+(x1-x0)*t+(i<n?rr(-.15,.15):0),nz=z0+(z1-z0)*t+(i<n?rr(-.15,.15):0);
     const l=Math.hypot(nx-px,nz-pz);bx((px+nx)/2,Y(k)+.002,(pz+nz)/2,.035,.025,l+.02,0,'cable',{rot:Math.atan2(nx-px,nz-pz),flat:1});px=nx;pz=nz;}};
-  const panel=(k,x,z,q,y,w,h,a,d)=>{const [fx,fz]=fwd(q);return bx(x-fx*(d||.12)/2,Y(k)+y,z-fz*(d||.12)/2,w,h,d||.12,q,{f:a,s:'metalD',t:'metalD'});};
+  // Keep the visible panel face clear of the wall instead of drawing two
+  // different textures at exactly the same depth as the camera moves.
+  const panel=(k,x,z,q,y,w,h,a,d)=>{const [fx,fz]=fwd(q),depth=d||.12,out=.018;return bx(x+fx*(out-depth/2),Y(k)+y,z+fz*(out-depth/2),w,h,depth,q,{f:a,s:'metalD',t:'metalD'});};
   const vend=(k,x,z,q)=>{const p=bx(x,Y(k),z,.92,1.9,.8,q,{f:'vend',s:'metalD',t:'metalD'},{glow:1});colP(p,1);};
   const mat=(k,x0,z0,x1,z1)=>bx((x0+x1)/2,Y(k),(z0+z1)/2,x1-x0,.025,z1-z0,0,'mat',{flat:1});
   const machine=(k,x,z,w,d,h,q,a)=>{const p=bx(x,Y(k),z,w,h,d,q,{f:a||'gen',s:'metalD',t:'metalD'});colP(p,1);return p;};
@@ -14947,11 +14949,12 @@ function facGeomRails(W,B){
 }
 const FDS={teal:[.34,.62,.66],blue:[.3,.5,.72],grey:[.46,.5,.52],green:[.4,.56,.4]};
 function facGeomFrames(W,B){
+  // Join jambs to the lintel at 2.3 m; do not overlap their textured faces.
   for(const d of W.doors){const y=FCY[d.k],alongZ=(d.x1-d.x0)<(d.z1-d.z0),t=(FDS[d.style]||FDS.grey).map(v=>v*.62).concat([.4]);
     if(alongZ){for(const [xf,sg] of[[d.x0,-1],[d.x1,1]]){const xa=sg<0?xf-.035:xf,xb=sg<0?xf:xf+.035;
-        facBox(B,xa,y,d.z0-.075,xb,y+2.38,d.z0+.005,'paint',t,{skip:['ny']});facBox(B,xa,y,d.z1-.005,xb,y+2.38,d.z1+.075,'paint',t,{skip:['ny']});facBox(B,xa,y+2.3,d.z0-.075,xb,y+2.38,d.z1+.075,'paint',t,{skip:['ny']});}}
+        facBox(B,xa,y,d.z0-.075,xb,y+2.3,d.z0+.005,'paint',t,{skip:['ny']});facBox(B,xa,y,d.z1-.005,xb,y+2.3,d.z1+.075,'paint',t,{skip:['ny']});facBox(B,xa,y+2.3,d.z0-.075,xb,y+2.38,d.z1+.075,'paint',t,{skip:['ny']});}}
     else{for(const [zf,sg] of[[d.z0,-1],[d.z1,1]]){const za=sg<0?zf-.035:zf,zb=sg<0?zf:zf+.035;
-        facBox(B,d.x0-.075,y,za,d.x0+.005,y+2.38,zb,'paint',t,{skip:['ny']});facBox(B,d.x1-.005,y,za,d.x1+.075,y+2.38,zb,'paint',t,{skip:['ny']});facBox(B,d.x0-.075,y+2.3,za,d.x1+.075,y+2.38,zb,'paint',t,{skip:['ny']});}}
+        facBox(B,d.x0-.075,y,za,d.x0+.005,y+2.3,zb,'paint',t,{skip:['ny']});facBox(B,d.x1-.005,y,za,d.x1+.075,y+2.3,zb,'paint',t,{skip:['ny']});facBox(B,d.x0-.075,y+2.3,za,d.x1+.075,y+2.38,zb,'paint',t,{skip:['ny']});}}
   }
 }
 const FLC={cyan:[.2,.8,1],warm:[1,.93,.8],red:[1,.1,.06]};
@@ -20222,8 +20225,8 @@ fixBar();buildTitleLevel();resize();requestAnimationFrame(frame);
   document.getElementById('ro-skip').addEventListener('click',dismiss);
 })();
 </script>
-<script src="assets/horror/spider.js?v=lamp-fix-r2-20261020"></script>
-<script src="assets/horror/signs.js?v=lamp-fix-r2-20261020"></script>
+<script src="assets/horror/spider.js?v=wall-textures-r1-20261020"></script>
+<script src="assets/horror/signs.js?v=wall-textures-r1-20261020"></script>
 <script id="facility-direct-entry">
 (function(){
   let tries=0,done=false;
