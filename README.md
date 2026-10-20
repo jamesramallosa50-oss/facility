@@ -1,4 +1,4 @@
-# THE FACILITY — East Wing / The Unvermeidlich
+# THE FACILITY — East Wing / Wolf Spider
 
 Open `index.html` through a local static web server, or deploy this folder unchanged to a static host.
 
@@ -8,11 +8,11 @@ A local static server is recommended because the game loads the demon GLB and au
 
 The new wing adds twelve rooms, including a botanical lab, observation and research rooms, a medical ward, morgue, surgery, quarantine, containment, cryogenics, turbines, records and decontamination. Looped corridors and another three-floor stairwell connect them. Warm and cool baked lighting, planting beds, medical furniture, machinery and illuminated signs distinguish the areas. Fuse and battery locations include the extension.
 
-The original hunter is joined by Patient, Crawler and Wraith scare encounters: opening doors can reveal a lunging figure; a crawler can pursue you briefly; an apparition watches from a corridor; figures cross your path; doors slam or knock; and brief blackouts interrupt the lighting. Extra encounters pause during the main hunter's chase and use simulation timers, so pausing freezes them.
+The original hunter is joined by the animated wolf spider: opening doors can reveal it; it can wait in a corridor, cross your path, or pursue you briefly. Doors slam or knock, and brief blackouts interrupt the lighting. The low-poly humanoid Patient and Wraith apparitions have been removed from all encounter routes, as have the ghost model's startup download and runtime. Extra encounters pause during the main hunter's chase and use simulation timers, so pausing freezes them.
 
 The Crawler now uses the uploaded rigged wolf spider, with its original skeleton and native walking/running animations. The runtime GLB is about 2.3 MB, reduced from 23 MB by optimizing textures and removing unused animation data. Animated pose bounds set its scale and ground offset; it faces the direction it travels and pauses its gait when blocked. Door waypoints use the centre of the opening, opening requests are throttled, and proximity scares require a clear line of sight on the same floor. The cached rig is safely detached and reattached on retries. Artist attribution and modification details are in [CREDITS.md](CREDITS.md).
 
-The Wraith uses the supplied **The Unvermeidlich** ghost by Memorie. Its four native animations, original meshes, 70-joint rig and transparent hair remain intact; the 3.6 MB runtime asset normalizes animated height and cancels root drift. Model credits appear on the menu and in the game credits.
+Emergency wall lamps now resolve a real air/solid wall boundary, including positions authored inside a wall. The entire backplate must have solid support and clear space in front. Each fixture has a flush metal housing, recessed luminous lens and protective cage; standalone emissive cubes are removed. Unsupported lamps produce no geometry, halo or baked light. Corrected mount coordinates also drive the lighting bake and halos.
 
 Wayfinding uses fitted, high resolution lettering on backed wall placards. Room labels sit above door headers; direction signs mount on solid corridor walls. Every panel is checked for solid wall support and empty space in front, including its corners. Unsupported signs are not drawn.
 
@@ -29,4 +29,4 @@ Controls:
 
 Door visuals now match their physical angles from initialization through settling. Collision checks sweep the full capsule movement, including fallback slides, against the physical leaf at every angle. Navigation assigns doors to the correct floor. Gameplay changes are integrated into `game-core.html`; the entry pages no longer depend on runtime string replacements or injected patches.
 
-Run `node --test tests/facility-regression.test.cjs` for parsing, route accessibility with railings, door collision and angle consistency, floor-specific door navigation, joystick/stamina behavior and encounter lifecycle, sign mounting, native ghost animation, root-motion containment and hunter detection/contact checks. Rendering and physical touch responsiveness still require browser/device playtesting.
+Run `node --test tests/facility-regression.test.cjs` for parsing, route accessibility with railings, door collision and angle consistency, floor-specific door navigation, joystick/stamina behavior and encounter lifecycle, sign mounting, supported emergency light fixtures, ghost removal and hunter detection/contact checks. Rendering and physical touch responsiveness still require browser/device playtesting.

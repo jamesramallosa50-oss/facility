@@ -9,7 +9,6 @@ const path=require('node:path');
 const root=path.resolve(__dirname,'..');
 const {parseSpider}=require('./helpers/spider-asset.cjs');
 const spiderRuntime=fs.readFileSync(path.join(root,'assets/horror/spider.js'),'utf8');
-const ghostRuntime=fs.readFileSync(path.join(root,'assets/horror/ghost.js'),'utf8');
 const signRuntime=fs.readFileSync(path.join(root,'assets/horror/signs.js'),'utf8');
 const html=fs.readFileSync(path.join(root,'game-core.html'),'utf8');
 const scripts=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].map(m=>m[1]);
@@ -27,11 +26,9 @@ function harness(buildGeometry=false){
   };
   ctx.THREE=T;ctx.window=ctx;
   vm.createContext(ctx);
-  vm.runInContext(spiderRuntime,ctx);vm.runInContext(ghostRuntime,ctx);vm.runInContext(signRuntime,ctx);
+  vm.runInContext(spiderRuntime,ctx);vm.runInContext(signRuntime,ctx);
   const model=new T.Group();model.add(new T.Mesh(new T.BoxGeometry(1,.3,1),new T.MeshStandardMaterial()));
   ctx.FacilitySpider.prepare({scene:model,animations:[new T.AnimationClip('Spider walking',1,[]),new T.AnimationClip('Spider running',.3,[])]});
-  const ghost=new T.Group();ghost.add(new T.Mesh(new T.BoxGeometry(.4,2,.3),new T.MeshStandardMaterial()));
-  ctx.FacilityGhost.prepare({scene:ghost,animations:['Stalking 1','Stalking 2','Stalking 3','Chasing'].map(n=>new T.AnimationClip('Armature|'+n,5,[]))});
   const code=section('const FCY=','/* ===== BUILD 3.15: THE FACILITY — part 2:')+
     section('function facDoorSeg(d)','/* ---------- doors: heavy leaves')+
     section('function facDoorGeo(F,M,d)','/* ===== BUILD 3.15: THE FACILITY — part 4:')+
@@ -39,7 +36,7 @@ function harness(buildGeometry=false){
     section('const FDM=','/* ---------- sound:')+
     section('function facPlayer(F,dt)','/* ---------- looking at things you can use')+
     section('/* Native Facility encounters.','/* ---------- each frame ---------- */');
-  vm.runInContext(code+'\nglobalThis.api={facPlan,facGrid,facNav,facNodeNear,facNP,facPath,facMove,facPush,facPlayer,facGround,facDoorSeg,facDoorDistance,facDoorSweep,facDoorsInit,facDoorsTick,facDoorOpen,facHauntInit,facHauntDoor,facHauntWalk,facHauntTick,facHauntEnd,facHauntFree,facHauntSpawn,facHauntDispose,facDmCatch,facDmState,facDmReveal,facDmPlace,facDemonTick,facDirector,facDmSee,FDM,facGeomAll,facBake,FAC,FCY,FNX,FNZ};',ctx);
+  vm.runInContext(code+'\nglobalThis.api={facPlan,facGrid,facNav,facNodeNear,facNP,facPath,facMove,facPush,facPlayer,facGround,facDoorSeg,facDoorDistance,facDoorSweep,facDoorsInit,facDoorsTick,facDoorOpen,facHauntInit,facHauntDoor,facHauntWalk,facHauntTick,facHauntEnd,facHauntFree,facHauntSpawn,facHauntDispose,facDmCatch,facDmState,facDmReveal,facDmPlace,facDemonTick,facDirector,facDmSee,facWallLightMount,facWallLightGeo,facGeomLights,facLightsPrep,FDM,facGeomAll,facBake,FAC,FCY,FNX,FNZ};',ctx);
   vm.runInContext('facDoorGeo=()=>({rotation:{y:0}});facLook=()=>{};facUse=()=>{};',ctx);
   const A=ctx.api,W=A.facPlan();A.facGrid(W);if(buildGeometry)A.facGeomAll(W);
   const F={W,doors:[],scene:new T.Scene(),t:20,noise:[],dm:{x:2,y:4,z:2,on:false,vis:false,st:'away'},stage:'find',fuses:0,dir:{t:0,lastChase:0,lastSeen:0,recoverUntil:0,graceUntil:0},camY:5.62,U:{uPow:{value:1},uEmg:{value:1}},pl:{x:11,y:4,z:8.2,yaw:0,pitch:0,vx:0,vz:0,vy:0,ground:true,sta:1,bat:1,light:true,crouch:false,bob:0,bobA:0,roll:0,ch:1.62,fear:0}};
@@ -48,7 +45,7 @@ function harness(buildGeometry=false){
 }
 const shared=harness(true);
 test('every inline script parses, including launch entry points',()=>{
-  for(const [name,code] of [['spider',spiderRuntime],['ghost',ghostRuntime],['signs',signRuntime]])new vm.Script(code,{filename:'assets/horror/'+name+'.js'});
+  for(const [name,code] of [['spider',spiderRuntime],['signs',signRuntime]])new vm.Script(code,{filename:'assets/horror/'+name+'.js'});
   for(const file of ['game-core.html','game.html','index.html']){
     const h=fs.readFileSync(path.join(root,file),'utf8');
     for(const s of h.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Script(s[1],{filename:file});
@@ -114,10 +111,11 @@ test('holding joystick forward walks indefinitely; explicit sprint lasts thirty 
   for(let i=0;i<5*60;i++)A.facPlayer(F,1/60);
   assert.equal(F.pl.sta,1);assert.equal(F.pl.tired,false);
 });
-test('three distinct creatures spawn, door reveals are delayed, and encounters clean up',()=>{
+test('only the rigged spider spawns, door reveals are delayed, and encounters clean up',()=>{
   const {ctx,A,F}=harness();A.facHauntInit(F);
-  assert.equal(F.haunt.actors.length,3);assert.equal(new Set(F.haunt.actors.map(a=>a.kind)).size,3);
-  const d={cx:49.25,cz:21.75,y:4,nx:-1,nz:0,th:0,scare:'patient'};
+  assert.equal(F.haunt.actors.length,1);assert.equal(F.haunt.actors[0].kind,'crawler');
+  assert.equal(A.facHauntSpawn(F,'wraith',[24,4,3],'watch'),false);assert.equal(A.facHauntSpawn(F,'patient',[24,4,3],'cross'),false);
+  const d={cx:49.25,cz:21.75,y:4,nx:-1,nz:0,th:0,scare:'crawler'};
   F.pl.x=47.75;F.pl.z=21.75;A.facHauntDoor(F,d,F.pl.x,F.pl.z);
   assert(F.haunt.active,'Expected opening the door to prime a scare');assert.equal(F.haunt.active.g.visible,false);
   vm.runInContext('facSee=()=>true;facOnScreen=()=>true;',ctx);d.th=.8;A.facHauntTick(F,.1);
@@ -177,26 +175,6 @@ test('all seventeen placards have solid support and leave the door openings clea
   assert.equal(ctx.FacilitySigns.mounted({k:1,x:65.5,z:45.72,nx:-1,nz:0},4,(x,y,z)=>ctx.facAir(W,x,y,z)),false);
   A.facHauntDispose(F);
 });
-test('the uploaded ghost keeps all four meshes, seventy joints and native animation without root drift',async()=>{
-  const gl=await parseSpider(T,path.join(root,'assets/horror/unvermeidlich-ghost.glb'),path.join(root,'assets/horror/gltf.js'));
-  const {ctx}=harness(),G=ctx.FacilityGhost,asset=G.prepare(gl),meshes=[];gl.scene.traverse(o=>{if(o.isSkinnedMesh)meshes.push(o);});
-  assert.equal(meshes.length,4);assert(meshes.every(m=>m.skeleton.bones.length===70));assert.equal(meshes.reduce((n,m)=>n+m.geometry.index.count/3,0),3048);assert.equal(gl.animations.length,4);
-  assert(meshes.some(m=>m.material.transparent),'Native hair/dress transparency should survive');
-  const ghost=G.createActor(),head=asset.root.getObjectByName('Head_06'),hips=asset.root.getObjectByName('Hips_01'),initial=head.quaternion.clone();
-  const parent=new T.Group();parent.position.set(10,4,25);parent.rotation.y=.9;parent.add(ghost.visual);
-  let maxHeight=0;
-  for(let i=0;i<180;i++){
-    G.tick(ghost,1,1/60,'door');
-    const local=ghost.visual.worldToLocal(hips.getWorldPosition(new T.Vector3()));
-    assert(Math.abs(local.x)<1e-4&&Math.abs(local.z)<1e-4,'Root motion escaped the collision-controlled actor');
-    if(i%15===0){const bounds=G.poseBounds(asset.root);maxHeight=Math.max(maxHeight,bounds.max.y-4);assert(bounds.min.y>3.98,'Animated feet should not sink below the floor');}
-  }
-  assert(initial.angleTo(head.quaternion)>.01,'Original ghost head should animate');assert(maxHeight>1.7&&maxHeight<2.2,'Ghost must fit under Facility doorways');
-  G.reset(ghost);G.tick(ghost,0,1/60,'watch');
-  parent.rotation.y=0;G.tick(ghost,0,1/60,'watch');
-  assert(head.getWorldPosition(new T.Vector3()).z>hips.getWorldPosition(new T.Vector3()).z,'Ghost should face actor +Z');
-  G.release(ghost);assert.equal(asset.visual.parent,null);const retry=G.createActor();G.tick(retry,1,1/60,'watch');assert.equal(asset.visual.parent,retry.visual);G.release(retry);
-});
 function hunter(){
   const h=harness(),{ctx,F}=h;
   Object.assign(F.dm,{on:true,g:new T.Group(),st:'prowl',stT:0,t:0,sees:0,waitT:100,alert:0,senT:0,face:0,x:F.pl.x,y:F.pl.y,z:F.pl.z-5,safeUntil:0});
@@ -242,4 +220,36 @@ test('the opening grace period prevents detection and director ambushes',()=>{
   const {ctx,A,F}=hunter();F.dir.graceUntil=F.t+35;F.dir.alertAt=F.t;F.dir.ambT=0;F.dm.stT=0;
   for(let i=0;i<60;i++){F.t+=.05;A.facDemonTick(F,.05);A.facDirector(F,.05);}
   assert.equal(F.dm.st,'prowl');assert.equal(F.dm.alert,0);assert(!ctx.HZ.dead);
+});
+
+test('every emergency wall lamp has a supported housing and a single recessed luminous face',()=>{
+  const {A,W,ctx}=shared,lamps=W.lights.filter(l=>l.wall);
+  assert(lamps.length>=12);
+  for(const l of lamps){
+    assert(l.mount&&l.wallL&&Number.isFinite(l.px),'No mount for lamp '+JSON.stringify(l));
+    const m=l.mount,tx=m.nz,tz=-m.nx;
+    assert.equal(Math.abs(m.nx)+Math.abs(m.nz),1);
+    for(const u of[-.125,0,.125])for(const v of[-.165,0,.165]){
+      assert(!ctx.facAir(W,m.x+tx*u-m.nx*.035,m.y+v,m.z+tz*u-m.nz*.035),'Backplate has no wall support');
+      assert(ctx.facAir(W,m.x+tx*u+m.nx*.12,m.y+v,m.z+tz*u+m.nz*.12),'Lens faces a wall or ceiling');
+    }
+    assert(Math.hypot(l.px-m.x,l.pz-m.z)<.101,'Lighting position should follow the actual fixture');
+    const quads=[];A.facWallLightGeo({quad(...q){quads.push(q);}},m,[1,.1,.06,0]);
+    assert.equal(quads.filter(q=>q[0]==='emis').length,1,'A wall light must have one lens face, not a glowing cube');
+    assert(quads.filter(q=>q[0]==='paint').length>=30,'Fixture should include a housing and cage');
+    assert(quads.every(q=>q[1].every(Number.isFinite)&&q[2].every(Number.isFinite)&&q[3].every(Number.isFinite)));
+  }
+});
+test('an unsupported wall lamp produces no floating geometry or light source',()=>{
+  const {A,W}=shared,l={k:1,x:56,z:22,col:'red',wall:true,y:5.95};
+  // Centre of a large real room; no supporting wall within the mount search.
+  assert.equal(A.facWallLightMount(W,l),null);const quads=[],testWorld={...W,lights:[l]};
+  A.facGeomLights(testWorld,{quad(...q){quads.push(q);}});assert.equal(quads.length,0);assert.equal(l.px,undefined);
+  A.facLightsPrep(testWorld);assert.equal(testWorld.BL.length,0,'Unsupported fixture should not leave invisible baked light');
+});
+test('the active entry pages cannot load retired ghosts or select humanoid scare routes',()=>{
+  assert(!core.includes('FacilityGhost'));assert(!core.includes("facHauntSpawn(F,'wraith'"));assert(!core.includes("facHauntSpawn(F,'patient'"));
+  const {W}=shared;assert(W.doors.every(d=>!d.scare||d.scare==='crawler'));
+  for(const name of ['index.html','game.html','sw.js'])assert(!fs.readFileSync(path.join(root,name),'utf8').includes('ghost.js'));
+  assert(!html.includes('assets/horror/ghost.js'));assert(!html.includes('unvermeidlich-ghost.glb'));
 });
