@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>The Facility — Survival Horror</title>
+<title>The Facility — Wolf Spider</title>
+<meta name="facility-build" content="wolf-spider-r1-20261020">
 <meta name="theme-color" content="#060807">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="mobile-web-app-capable" content="yes">
@@ -15715,6 +15716,10 @@ let FACW=null;
 async function facBuild(prog){
   const H=HZ,F=H.fac={t:0,noise:[],msgs:[]};
   const step=async(p,t)=>{prog(p,t);await new Promise(r=>setTimeout(r,0));};
+  await step(.005,'WAKING THE WOLF SPIDER');
+  if(!window.FacilitySpider)throw new Error('Wolf spider runtime is missing');
+  await window.FacilitySpider.load(p=>prog(.005+p*.02,'WAKING THE WOLF SPIDER'),hzFetch,Math.min(4,renderer.capabilities.getMaxAnisotropy()));
+  if(HZ!==H)return;
   let W;
   if(FACW){W=F.W=FACW.W;F.M=FACW.M;F.U=FACW.U;F.AT=FACW.AT;await step(.5,'BACK INSIDE');
     const U=F.U;U.uPow.value=1;U.uEmg.value=1;U.uLOn.value=1;}
@@ -16271,7 +16276,7 @@ function facHauntInit(F){
   const mesh=(g,geo,mat,x,y,z,sx,sy,sz)=>{const m=new T.Mesh(geo,mat);m.position.set(x,y,z);m.scale.set(sx,sy,sz);g.add(m);return m;};
   const limb=(g,mat,a,b,r)=>{const m=mesh(g,cyl,mat,(a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2,r,Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2]),r);m.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),new T.Vector3(b[0]-a[0],b[1]-a[1],b[2]-a[2]).normalize());return m;};
   const make=kind=>{
-    const g=new T.Group(),joints=[];
+    const g=new T.Group(),joints=[];let spider=null;
     if(kind==='patient'){
       mesh(g,cone,gown,0,.9,0,.42,1.3,.3);
       mesh(g,sphere,skin,0,1.77,0,.18,.27,.18);
@@ -16285,18 +16290,7 @@ function facHauntInit(F){
         limb(g,skin,[s*.12,.4,0],[s*.15,.08,.06],.06);
       }
     }else if(kind==='crawler'){
-      mesh(g,sphere,dark,0,.42,-.1,.33,.27,.55);
-      mesh(g,sphere,bone,0,.51,.48,.22,.19,.24);
-      mesh(g,sphere,dark,0,.45,.67,.16,.1,.045);
-      for(const s of[-1,1]){
-        mesh(g,sphere,red,s*.1,.56,.68,.035,.022,.015);
-        for(let j=0;j<3;j++){
-          const leg=new T.Group();leg.position.set(s*.22,.42,.28-j*.32);g.add(leg);joints.push(leg);
-          limb(leg,bone,[0,0,0],[s*.43,.13,-.13],.045);
-          limb(leg,bone,[s*.43,.13,-.13],[s*.68,-.38,.22],.026);
-        }
-      }
-      for(let i=0;i<5;i++)mesh(g,cone,bone,0,.68,-.4+i*.17,.06,.22,.07);
+      spider=window.FacilitySpider.createActor();g.add(spider.visual);
     }else{
       mesh(g,cone,ghost,0,1.1,0,.4,1.7,.31);
       mesh(g,sphere,skin,0,2.08,.03,.17,.27,.18);
@@ -16308,7 +16302,7 @@ function facHauntInit(F){
         for(let j=0;j<3;j++)limb(g,skin,[s*.55,.66,.1],[s*(.49+j*.06),.3,.24],.012);
       }
     }
-    g.visible=false;F.scene.add(g);return{kind,g,joints,on:false,x:0,y:0,z:0,age:0,path:null};
+    g.visible=false;F.scene.add(g);return{kind,g,joints,spider,radius:spider?spider.radius:.26,height:spider?spider.height:1.9,eye:spider?spider.eye:1.5,on:false,x:0,y:0,z:0,age:0,path:null};
   };
   F.haunt={actors:['patient','crawler','wraith'].map(make),active:null,next:10,seq:0,ambientAt:20,blackout:0,used:new Set(),mats:[skin,gown,dark,bone,eye,red,ghost],signMats:[],signTex:[],signs:[]};
   /* Clear landmarks at eye height, readable in low light. */
@@ -16324,7 +16318,12 @@ function facHauntInit(F){
 function facHauntFree(F){return F.haunt&&!F.haunt.active&&F.t>=F.haunt.next&&F.stage==='find'&&F.dm.st!=='chase'&&F.dm.st!=='reveal'&&(!F.dm.on||F.dm.st==='away'||Math.hypot(F.dm.x-F.pl.x,F.dm.y-F.pl.y,F.dm.z-F.pl.z)>8);}
 function facHauntSpawn(F,kind,p,mode,door){
   const S=F.haunt,a=S.actors.find(a=>a.kind===kind);if(!a||S.active)return false;
-  Object.assign(a,{x:p[0],y:p[1],z:p[2],age:0,mode,door:door||null,on:true,revealed:mode!=='door',path:null,pi:0,repath:0,seen:0,stung:false,life:mode==='hunt'?8:mode==='watch'?5:2.4});
+  if(!p.every(Number.isFinite))return false;
+  const pos={x:p[0],y:p[1],z:p[2]},r=a.radius||.26,h=a.height||1.9;
+  if(facPush(F,pos,r,h,a.spider?.28:.4)>.16||facPush(F,{...pos},r-.004,h,a.spider?.28:.4)>.002)return false;
+  const ground=facGround(F,pos.x,pos.z,pos.y,.35);if(!Number.isFinite(ground)||Math.abs(ground-pos.y)>.35)return false;pos.y=ground;
+  Object.assign(a,{x:pos.x,y:pos.y,z:pos.z,age:0,mode,door:door||null,on:true,revealed:mode!=='door',path:null,pi:0,repath:0,seen:0,stung:false,doorAt:0,stuck:0,life:mode==='hunt'?8:mode==='watch'?5:2.4});
+  if(a.spider)window.FacilitySpider.reset(a.spider);
   a.g.position.set(a.x,a.y,a.z);a.g.rotation.y=Math.atan2(F.pl.x-a.x,F.pl.z-a.z);a.g.visible=a.revealed;S.active=a;S.next=F.t+24+Math.random()*14;return true;
 }
 function facHauntDoor(F,d,x,z){
@@ -16340,17 +16339,30 @@ function facHauntSting(F,a){
   facPS(F,a?a.x:F.pl.x,F.camY,a?a.z:F.pl.z,o=>{sfxT(o,62,28,.6,'sine',.35);sfxN(o,.36,.16,1250,'bandpass',0,1.4);sfxT(o,460,140,.5,'sawtooth',.06);},1);
   if(F.post&&meta.flash!==false)F.post.mat.uniforms.uHurt.value=Math.max(F.post.mat.uniforms.uHurt.value,.12);
 }
-function facHauntEnd(F){const S=F.haunt,a=S&&S.active;if(!a)return;a.on=false;a.g.visible=false;S.active=null;S.next=Math.max(S.next,F.t+18);}
+function facHauntEnd(F){const S=F.haunt,a=S&&S.active;if(!a)return;a.on=false;a.g.visible=false;if(a.spider){a.spider.walk.paused=a.spider.run.paused=true;}S.active=null;S.next=Math.max(S.next,F.t+18);}
 function facHauntWalk(F,a,tx,ty,tz,speed,dt){
   a.repath-=dt;
   if(a.repath<=0){a.repath=.7;const s=facNodeNear(F,a.x,a.y,a.z),t=facNodeNear(F,tx,ty,tz);a.path=facPath(F,s,t,3000,true);a.pi=1;}
   if(!a.path||a.pi>=a.path.length)return;
-  const n=a.path[a.pi],p=facNP(F,n),d=Math.hypot(p[0]-a.x,p[2]-a.z),di=F.nav.doorOf[n];
-  if(di>=0){const door=F.doors[di];if(Math.abs(door.th)<1.15){facDoorOpen(F,door,a.x,a.z,false);return;}}
-  if(d<.16){a.pi++;return;}
-  const step=Math.min(d,speed*dt);a.g.rotation.y=Math.atan2(p[0]-a.x,p[2]-a.z);
-  facMove(F,a,(p[0]-a.x)/d*step,(p[2]-a.z)/d*step,a.kind==='crawler'?.24:.26,a.kind==='crawler'?.85:1.9,.4);
-  const ground=facGround(F,a.x,a.z,a.y,.48);if(Math.abs(ground-a.y)<.6)a.y=ground;
+  const n=a.path[a.pi],p=facNP(F,n),di=F.nav.doorOf[n];
+  if(di>=0){
+    const door=F.doors[di];
+    if(door.lock){a.path=null;a.repath=.7;return;}
+    // Walk through the middle of the opening, rather than the quarter-cell
+    // next to a jamb. Request a door once, not once per animation frame.
+    p[0]=door.cx;p[2]=door.cz;
+    if(Math.abs(door.th)<1.4){
+      if(F.t>=(a.doorAt||0)&&Math.abs(door.tgt)<1.4){facDoorOpen(F,door,a.x,a.z,false);a.doorAt=F.t+1;}
+      return;
+    }
+  }
+  const d=Math.hypot(p[0]-a.x,p[2]-a.z);if(d<.16){a.pi++;return;}
+  const step=Math.min(d,speed*dt),target=Math.atan2(p[0]-a.x,p[2]-a.z),turn=Math.atan2(Math.sin(target-a.g.rotation.y),Math.cos(target-a.g.rotation.y));
+  a.g.rotation.y+=clamp(turn,-dt*9,dt*9);
+  const ox=a.x,oz=a.z;
+  facMove(F,a,(p[0]-a.x)/d*step,(p[2]-a.z)/d*step,a.radius||.26,a.height||1.9,a.spider?.28:.4);
+  const ground=facGround(F,a.x,a.z,a.y,.35);if(Math.abs(ground-a.y)<.45)a.y=ground;
+  if(Math.hypot(a.x-ox,a.z-oz)<.005){a.stuck=(a.stuck||0)+dt;if(a.stuck>.6){a.repath=0;a.path=null;a.stuck=0;}}else a.stuck=0;
 }
 function facHauntAhead(F){
   const pl=F.pl,fx=-Math.sin(pl.yaw),fz=-Math.cos(pl.yaw);
@@ -16370,16 +16382,16 @@ function facHauntTick(F,dt){
   const a=S.active;
   if(a){
     if(F.dm.st==='chase'||F.stage!=='find'){facHauntEnd(F);return;}
-    a.age+=dt;
+    const oldX=a.x,oldZ=a.z;a.age+=dt;
     if(!a.revealed){
-      if(Math.abs(a.door.th)>.5&&facSee(F,pl.x,F.camY,pl.z,a.x,a.y+1.2,a.z,false)){a.revealed=true;a.age=0;a.g.visible=true;facHauntSting(F,a);}
+      if(Math.abs(a.door.th)>.5&&facSee(F,pl.x,F.camY,pl.z,a.x,a.y+a.eye,a.z,false)){a.revealed=true;a.age=0;a.g.visible=true;facHauntSting(F,a);}
       else if(a.age>5){facHauntEnd(F);return;}
     }else{
-      const dist=Math.hypot(a.x-pl.x,a.z-pl.z),visible=facOnScreen(F,a.x,a.y+(a.kind==='crawler'?.5:1.6),a.z)&&facSee(F,pl.x,F.camY,pl.z,a.x,a.y+1,a.z,false);
+      const level=Math.abs(a.y-pl.y)<.65,dist=Math.hypot(a.x-pl.x,a.z-pl.z,(a.y-pl.y)*2),line=facSee(F,pl.x,F.camY,pl.z,a.x,a.y+a.eye,a.z,false),visible=facOnScreen(F,a.x,a.y+a.eye,a.z)&&line;
       if(a.mode==='watch'){
         a.g.rotation.y=Math.atan2(pl.x-a.x,pl.z-a.z);if(visible)a.seen+=dt;
         else facHauntWalk(F,a,pl.x,pl.y,pl.z,1.6,dt);
-        if(a.seen>.8||dist<2){facHauntSting(F,a);facHauntEnd(F);return;}
+        if(a.seen>.8||(level&&line&&dist<2)){facHauntSting(F,a);facHauntEnd(F);return;}
       }else if(a.mode==='cross'){
         facHauntWalk(F,a,a.to[0],a.to[1],a.to[2],6,dt);
         if(visible)facHauntSting(F,a);
@@ -16387,11 +16399,12 @@ function facHauntTick(F,dt){
         if(visible&&a.age>.15)facHauntSting(F,a);
         if(a.kind==='crawler'&&a.mode==='door'){a.life=7;a.mode='hunt';}
         if(dist>1.25)facHauntWalk(F,a,pl.x,pl.y,pl.z,a.kind==='crawler'?3.9:4.8,dt);
-        if(dist<1.35){facHauntSting(F,a);a.age=Math.max(a.age,a.life-.3);}
+        if(level&&line&&dist<1.35){facHauntSting(F,a);a.age=Math.max(a.age,a.life-.3);}
       }
       if(a.age>a.life){facHauntEnd(F);return;}
     }
-    a.g.position.set(a.x,a.y+(a.kind==='wraith'?.08+Math.sin(F.t*2.2)*.12:Math.sin(a.age*15)*.015),a.z);
+    a.g.position.set(a.x,a.y+(a.spider?0:a.kind==='wraith'?.08+Math.sin(F.t*2.2)*.12:Math.sin(a.age*15)*.015),a.z);
+    if(a.spider)window.FacilitySpider.tick(a.spider,a.revealed?Math.hypot(a.x-oldX,a.z-oldZ)/Math.max(dt,.001):0,dt);
     for(let i=0;i<a.joints.length;i++)a.joints[i].rotation.z=Math.sin(a.age*(a.kind==='crawler'?16:7)+i*Math.PI)*.15;
   }
   if(F.t>S.ambientAt&&!S.active){
@@ -16420,7 +16433,7 @@ function facHauntTick(F,dt){
 }
 function facHauntDispose(F){
   const S=F.haunt;if(!S)return;
-  for(const a of S.actors)a.g.visible=false;
+  for(const a of S.actors){a.g.visible=false;if(a.spider)window.FacilitySpider.release(a.spider);}
   for(const m of [...S.mats,...S.signMats])m.dispose();for(const t of S.signTex)t.dispose();F.haunt=null;
 }
 
@@ -16798,7 +16811,7 @@ function buildCoverProps(){
  const it=(id,p,label,sub)=>'<button type="button"'+(id?' id="'+id+'"':'')+(p?' data-p="'+p+'"':'')+(id==='mmcont'?' hidden':'')+'>'+label+'<small>'+sub+'</small></button>';
  mm.innerHTML='<div id="mmfog"></div><div id="mmside"><nav id="mmnav">'+it('mmcont','','CONTINUE','')+it('','modes','PLAY THE FACILITY','Survival horror')+it('','opt','OPTIONS','Graphics, full screen, controller buttons')+it('','how','HOW TO PLAY','Controls and survival')+'</nav></div>'+
    '<div id="mmlogo"><svg viewBox="0 0 16 24" shape-rendering="crispEdges" aria-hidden="true"><rect x="6" y="0" width="4" height="2" fill="#ff9426"/><rect x="5" y="2" width="6" height="4" fill="#3a3630"/><rect x="7" y="3" width="2" height="2" fill="#ffd24a"/><rect x="4" y="6" width="8" height="6" fill="#4a463e"/><rect x="7" y="8" width="2" height="2" fill="#ffb040"/><rect x="3" y="12" width="10" height="6" fill="#3e3a34"/><rect x="5" y="14" width="2" height="2" fill="#ff8a2a"/><rect x="9" y="14" width="2" height="2" fill="#ff8a2a"/><rect x="2" y="18" width="12" height="6" fill="#2e2a26"/><rect x="7" y="20" width="2" height="4" fill="#0a0806"/></svg><div><b>GLOOMSPIRE</b><i>EVERY FLOOR IS LOCKED</i></div></div>'+
-   '<div id="mmfoot"><div id="mmrec"></div><div id="mmstats"></div><div id="mmhint">↑ ↓ choose · Enter open · Esc back</div><div id="mmbuild">The Facility · East Wing</div><button type="button" id="mmlogb">▤ UPDATE LOG<i id="mmlogdot"></i></button></div>';
+   '<div id="mmfoot"><div id="mmrec"></div><div id="mmstats"></div><div id="mmhint">↑ ↓ choose · Enter open · Esc back</div><div id="mmbuild">The Facility · Wolf Spider</div><button type="button" id="mmlogb">▤ UPDATE LOG<i id="mmlogdot"></i></button></div>';
  TI.appendChild(mm);
  const page=(id,title)=>{const d=document.createElement('div');d.className='mmpage';d.id='mmp-'+id;d.innerHTML='<div class="mmhead"><button type="button" class="mmback">◀ BACK</button><h2>'+title+'</h2></div>';TI.appendChild(d);return d;};
  const mv=(d,ids)=>{for(const id of ids){const e=typeof id==='string'?$(id):id;if(e)d.appendChild(e);}};
@@ -16810,7 +16823,7 @@ function buildCoverProps(){
  mv(pH,['howto']);mv(pM,['mpbox','mpstat']);
  {const G=gmModes();pG.insertAdjacentHTML('beforeend','<div id="gmgrid">'+G.map(m=>'<button type="button" class="gmcard" data-gm="'+m.id+'"><span class="gmpic" style="background-image:url('+m.pic+')"><em>'+m.tag+'</em></span><b>'+m.t+'</b><small>'+m.d+'</small></button>').join('')+'</div>');
   pG.querySelectorAll('.gmcard').forEach(b=>b.addEventListener('click',()=>{try{sfx('key');}catch(e){}const id=b.dataset.gm;if(id==='classic')go('climb');else if(id==='horror')horStart('fac');else if(id==='hide')horStart('hide');}));}
- pK.insertAdjacentHTML('beforeend','<div id="mmcred"><p><b style="color:#ffd890">THE FACILITY</b></p><p>Explore three levels, restore power, and survive the creature stalking the facility.</p><p>Built in the browser with three.js. Music and sound are made live in Web Audio.</p><p>Find the fuses. Reach the lift. Escape.</p></div>');
+ pK.insertAdjacentHTML('beforeend','<div id="mmcred"><p><b style="color:#ffd890">THE FACILITY</b></p><p>Explore three levels, restore power, and survive the creature stalking the facility.</p><p>Built in the browser with three.js. Music and sound are made live in Web Audio.</p><p>Find the fuses. Reach the lift. Escape.</p><p>Wolf Spider by <a href="https://sketchfab.com/DreamingInAlternation27" target="_blank" rel="noopener">Dreaming In Alternation 27</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. Textures optimized and model adapted for the game. <a href="CREDITS.md" target="_blank" rel="noopener">Full credits</a>.</p></div>');
  {const LOGV='3.16',UL=[
    ['3.16','19 Oct 2026',['The Facility now looks much more like the video it was made from: the concrete corridors glow a deep teal (even in the shadows), the walls are smooth plank-marked concrete instead of pitted, the floor tiles are bigger and glossier, and every tube light has a soft glow round it.','The yellow and red offices are brighter and warmer, with lighter stained ceilings and cleaner walls. Office doors are painted green with brass handles, roll-up metal shutters hang in the offices, the server racks are full of old coloured equipment, the generator room is lit red, and your flashlight is red.','It hunts harder: shorter quiet spells, earlier ambushes, and a new scare where it sprints across the corridor ahead of you. Sometimes it notices you and turns. When it comes round a corner at you, you hear it.','Running fixed: sprinting now reaches full speed in about a second (it used to creep up over four seconds, so it caught you while you were sprinting), and turning back while sprinting is a quick pivot instead of a wide arc. Walking into a closed door pushes it open (sprint into it to bang it open).','It no longer gets confused by the floor below: it used to think it had arrived when it walked under the place it was heading for.','Smoother on phones: the picture gets a little softer when the frame rate drops and sharper again when there is room, with fewer small hitches. Falling past a ledge can no longer clip you into its edge. The long objective hint fades after you have read it.']],
    ['3.15','18 Oct 2026',['Horror is now THE FACILITY: a dead research building on three levels, with cold cyan concrete corridors, yellow and red offices, a server hall, stairwells and a two-storey atrium. Find the three fuses (one on each level), put them in the breaker beside the freight lift in the basement, then stay alive until the lift arrives.','The demon hunts you by sight and sound. It opens and smashes doors, waits behind doors, drops out of ceiling vents, cuts you off round corners, jumps down from the gallery and climbs up through the broken floor. When the power fails at the end, only the red emergency lights are left.','You have a weak flashlight (the battery runs down, spare batteries lie around), stamina for sprinting, and heavy doors you can open, shut or slam in its face. Crouch in the dark behind crates with your light off and it may walk right past you.','New lighting for this mode: fluorescent tubes with real shadows, wet floors that reflect the lights, dusty light shafts, film grain and colour fringing. Smooth movement with weight: head bob, a lean when you turn, and a tilt when you are out of breath or scared.','Sound: a radio on your belt crackles louder as it gets closer, your heart speeds up, its footsteps come from where it really is and sound muffled behind walls, doors creak and slam, and the building groans in the distance.','Your touch layout (SPRINT, CROUCH, USE, LIGHT), controller, gyro, field of view and graphics settings work here too. Try again restarts straight away.']],
@@ -20190,6 +20203,7 @@ fixBar();buildTitleLevel();resize();requestAnimationFrame(frame);
   document.getElementById('ro-skip').addEventListener('click',dismiss);
 })();
 </script>
+<script src="assets/horror/spider.js?v=wolf-spider-r1-20261020"></script>
 <script id="facility-direct-entry">
 (function(){
   let tries=0,done=false;
