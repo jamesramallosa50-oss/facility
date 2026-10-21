@@ -7,6 +7,13 @@ function facPlayers(F){return F.coop?[F.pl,...F.coop.players.values()]:[F.pl];}
 function facAuthority(F){return !F.coop||F.coop.host;}
 function facAlive(p){return !p.downed&&(p.hp==null||p.hp>0)&&!p.loading&&!p.offline;}
 function facHuntTarget(F,actor=F.dm,spider=false){
+  // Share one perception result between the hunter, director and haunt logic.
+  // Movement/contact still run every frame; vision needs only ten samples/sec.
+  const cached=actor.huntPick;
+  if(F.t<actor.huntAt&&cached&&facAlive(cached)&&
+    (cached===F.pl||F.coop?.players.get(cached.netId)===cached)&&
+    (!globalThis.FacilityWorld||!globalThis.FacilityWorld.enemyOutside(cached)))return cached;
+  actor.huntAt=F.t+.1;
   const list=facPlayers(F).filter(p=>facAlive(p)&&(!globalThis.FacilityWorld||!globalThis.FacilityWorld.enemyOutside(p)));if(!list.length)return F.pl;
   let best=null,score=Infinity;
   for(const p of list){
@@ -16,7 +23,7 @@ function facHuntTarget(F,actor=F.dm,spider=false){
   }
   // Retain the last target while it hides; never reveal a new hidden player.
   best=best||list.find(p=>(p.netId||'local')===actor.targetId)||F.pl;
-  if(!facAlive(best))best=list[0];actor.targetId=best.netId||'local';return best;
+  if(!facAlive(best))best=list[0];actor.targetId=best.netId||'local';actor.huntPick=best;return best;
 }
 function facHitFeedback(F,amount){
   F.shake=Math.max(F.shake||0,.5);F.pl.fear=Math.max(F.pl.fear||0,.55);
@@ -54,9 +61,10 @@ function facHealthHud(F){
   let e=document.getElementById('fhealth');
   if(!e){
     e=document.createElement('div');e.id='fhealth';e.innerHTML='<div class="fh-label"><span id="fh-state">VITALS</span><b id="fh-value">100 / 100</b></div><div id="fh-track" role="progressbar" aria-label="Health" aria-valuemin="0" aria-valuemax="100"><i></i></div>';
-    document.getElementById('hzui')?.appendChild(e);
+    document.getElementById('hzui')?.appendChild(e);F.healthHudState=null;
   }
   const hp=Math.ceil(F.pl.hp??100),label=F.pl.downed?'DOWN · WAIT FOR A REVIVE':hp<=30?'CRITICAL':hp<100?'INJURED':'VITALS';
+  const state=hp+':'+label;if(F.healthHudState===state)return;F.healthHudState=state;
   e.classList.toggle('critical',hp<=30);e.classList.toggle('downed',!!F.pl.downed);
   document.getElementById('fh-value').textContent=hp+' / 100';document.getElementById('fh-state').textContent=label;
   const track=document.getElementById('fh-track');track.setAttribute('aria-valuenow',hp);track.firstChild.style.width=hp+'%';

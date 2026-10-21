@@ -10,6 +10,34 @@
  function enemyOutside(p){return outside(p)||(p.x>72&&Math.abs(p.y-4)<1.5);}
  function nativeAt(W,x,z){return (W.nativeRooms||[]).some(r=>insideRect(r,x,z));}
  function shared(g){g.userData.facShared=true;return g;}
+ function mobile(){return !!global.matchMedia?.('(pointer:coarse)').matches;}
+ function surface(source){
+  if(!mobile())return source.clone();
+  // Vertex-lit materials retain the uploaded textures without a PBR lighting
+  // loop for every fragment on a phone's GPU.
+  return new T.MeshLambertMaterial({color:source.color,map:source.map,emissive:source.emissive||0x000000,
+   emissiveMap:source.emissiveMap,emissiveIntensity:source.emissiveIntensity??1,side:source.side,
+   transparent:source.transparent,opacity:source.opacity,alphaTest:source.alphaTest,vertexColors:source.vertexColors});
+ }
+ function batchStatic(root,retain=false){
+  root.updateMatrixWorld(true);const inverse=new T.Matrix4().copy(root.matrixWorld).invert(),buckets=new Map();
+  root.traverse(o=>{if(!o.isMesh||o.isInstancedMesh||Array.isArray(o.material)||o.material.fog===false||o.geometry.morphAttributes.position)return;
+   const g=o.geometry;if(!g.attributes.position.count)return;g.computeBoundingBox();const matrix=new T.Matrix4().multiplyMatrices(inverse,o.matrixWorld),center=g.boundingBox.getCenter(new T.Vector3()).applyMatrix4(matrix);
+   const attrs=Object.keys(g.attributes).sort(),key=[o.material.uuid,o.renderOrder,Math.floor(center.x/12),Math.floor(center.y/4),Math.floor(center.z/12),...attrs.map(k=>k+':'+g.attributes[k].itemSize+':'+g.attributes[k].normalized+':'+g.attributes[k].array.constructor.name)].join('|');
+   if(!buckets.has(key))buckets.set(key,[]);buckets.get(key).push({o,matrix});
+  });
+  for(const entries of buckets.values()){
+   if(entries.length<2)continue;
+   const sources=entries.map(({o,matrix})=>o.geometry.clone().applyMatrix4(matrix)),first=sources[0],vertices=sources.reduce((n,g)=>n+g.attributes.position.count,0),indices=sources.reduce((n,g)=>n+(g.index?.count||g.attributes.position.count),0),geo=new T.BufferGeometry();
+   for(const key of Object.keys(first.attributes)){const attr=first.attributes[key],array=new attr.array.constructor(vertices*attr.itemSize);let at=0;for(const g of sources){array.set(g.attributes[key].array,at);at+=g.attributes[key].array.length;}geo.setAttribute(key,new T.BufferAttribute(array,attr.itemSize,attr.normalized));}
+   const index=vertices>65535?new Uint32Array(indices):new Uint16Array(indices);let at=0,offset=0;
+   for(const g of sources){const n=g.index?.count||g.attributes.position.count;for(let i=0;i<n;i++)index[at++]=(g.index?g.index.getX(i):i)+offset;offset+=g.attributes.position.count;g.dispose();}
+   geo.setIndex(new T.BufferAttribute(index,1));geo.computeBoundingBox();geo.computeBoundingSphere();if(retain)shared(geo);
+   const mesh=new T.Mesh(geo,entries[0].o.material);mesh.renderOrder=entries[0].o.renderOrder;mesh.matrixAutoUpdate=false;root.add(mesh);
+   for(const {o}of entries){o.parent.remove(o);if(!o.geometry.userData.facShared)o.geometry.dispose();}
+  }
+  const meshes=[];root.traverse(o=>{if(o.isMesh&&!o.isInstancedMesh&&o.material.fog!==false){o.geometry.computeBoundingSphere();o.updateMatrix();o.matrixAutoUpdate=false;meshes.push(o);}});return meshes;
+ }
  function clipMesh(geo,box){
   // Triangle minus AABB, preserving UVs and normals. This opens a real entrance
   // in the uploaded maze instead of leaving an invisible wall in its doorway.
@@ -48,22 +76,31 @@
   const cfg=settings[name];if(!cfg)throw Error('Unknown environment '+name);gl.scene.updateMatrixWorld(true);
   const chosen=[];gl.scene.traverse(o=>{if(!o.isMesh)return;const b=new T.Box3().setFromObject(o),c=b.getCenter(new T.Vector3());if(name==='store'&&(Math.abs(c.x)>9||Math.abs(c.z)>9||b.max.y>7||b.getSize(new T.Vector3()).length()>25))return;chosen.push(o);});
   const bounds=new T.Box3();for(const o of chosen)bounds.union(new T.Box3().setFromObject(o));const center=bounds.getCenter(new T.Vector3()),group=new T.Group();group.name='Uploaded '+name;
-  const normalize=new T.Matrix4().makeScale(cfg.scale,cfg.scale,cfg.scale);normalize.setPosition(-center.x*cfg.scale,-cfg.floor*cfg.scale,-center.z*cfg.scale);
+  const materials=new Map(),normalize=new T.Matrix4().makeScale(cfg.scale,cfg.scale,cfg.scale);normalize.setPosition(-center.x*cfg.scale,-cfg.floor*cfg.scale,-center.z*cfg.scale);
   for(const o of chosen){let g=o.geometry.clone();g.applyMatrix4(o.matrixWorld);g.applyMatrix4(normalize);
    if(name==='backroom'){const cut=clipMesh(g,[-24,.1,11.9,-17,2.55,16.4]);g.dispose();g=cut;}
-   shared(g);const m=(Array.isArray(o.material)?o.material[0]:o.material).clone();m.side=T.DoubleSide;m.roughness=Math.max(.7,m.roughness||0);if(m.emissive){m.emissive.setHex(0x253b40);m.emissiveIntensity=.28;m.emissiveMap=m.map||null;}m.needsUpdate=true;
+   shared(g);const original=Array.isArray(o.material)?o.material[0]:o.material;let m=materials.get(original);if(!m){m=surface(original);materials.set(original,m);m.side=T.DoubleSide;if(m.roughness!=null)m.roughness=Math.max(.7,m.roughness||0);if(m.emissive){m.emissive.setHex(0x253b40);m.emissiveIntensity=.28;m.emissiveMap=m.map||null;}m.needsUpdate=true;}
    const mesh=new T.Mesh(g,m);mesh.name=o.name;mesh.castShadow=false;mesh.receiveShadow=false;group.add(mesh);
   }
-  const a={root:group,colliders:makeColliders(group),bounds:new T.Box3().setFromObject(group)};assets.set(name,a);return a;
+  const a={root:group,colliders:makeColliders(group),bounds:new T.Box3().setFromObject(group)};batchStatic(group,true);assets.set(name,a);return a;
  }
  function prepareDoor(gl){
-  gl.scene.updateMatrixWorld(true);const frame=[],leaf=[];gl.scene.traverse(o=>{if(!o.isMesh)return;const g=o.geometry.clone().applyMatrix4(o.matrixWorld);shared(g);const mat=(Array.isArray(o.material)?o.material[0]:o.material).clone();mat.side=T.DoubleSide;mat.roughness=.9;mat.emissive?.setHex(0x202e2b);mat.emissiveIntensity=.32;mat.emissiveMap=mat.map||null;(o.name.toLowerCase().includes('glass')?leaf:frame).push({g,mat});});
+  gl.scene.updateMatrixWorld(true);const frame=[],leaf=[];gl.scene.traverse(o=>{if(!o.isMesh)return;const g=o.geometry.clone().applyMatrix4(o.matrixWorld);shared(g);const mat=surface(Array.isArray(o.material)?o.material[0]:o.material);mat.side=T.DoubleSide;if(mat.roughness!=null)mat.roughness=.9;mat.emissive?.setHex(0x202e2b);mat.emissiveIntensity=.32;mat.emissiveMap=mat.map||null;(o.name.toLowerCase().includes('glass')?leaf:frame).push({g,mat});});
   if(!leaf.length||!frame.length)throw Error('Hospital door is missing its frame or moving leaf');const a={frame,leaf};assets.set('hospital-door',a);return a;
  }
  function door(F,d){
   const a=assets.get('hospital-door');if(!a)return null;const leaf=new T.Group(),fixed=new T.Group(),sx=d.w/1.90194,sy=2.3/3.46359,sz=.24;
-  for(const[src,parent]of[[a.frame,fixed],[a.leaf,leaf]])for(const p of src){const m=new T.Mesh(p.g,p.mat);m.scale.set(sx,sy,sz);m.position.x=d.w/2;parent.add(m);}
+  if(!F.doorInstances)F.doorInstances={batches:[],parts:new Map(),matrix:new T.Matrix4(),view:new T.Matrix4(),frustum:new T.Frustum(),sphere:new T.Sphere()};const B=F.doorInstances;
+  for(const[src,parent]of[[a.frame,fixed],[a.leaf,leaf]])for(const p of src){
+   let batch=B.parts.get(p);if(!batch){p.g.computeBoundingSphere();const mesh=new T.InstancedMesh(p.g,p.mat,F.W.doors.length);mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);mesh.frustumCulled=false;mesh.count=0;F.scene.add(mesh);batch={mesh,entries:[]};B.parts.set(p,batch);B.batches.push(batch);}
+   const m=new T.Mesh(p.g,p.mat);m.scale.set(sx,sy,sz);m.position.x=d.w/2;m.updateMatrix();m.matrixAutoUpdate=false;m.visible=false;parent.add(m);batch.entries.push({parent,local:m.matrix});
+  }
   leaf.position.set(d.hx,d.y,d.hz);leaf.rotation.y=-d.a0;fixed.position.copy(leaf.position);fixed.rotation.y=leaf.rotation.y;F.scene.add(fixed);d.fixedFrame=fixed;return leaf;
+ }
+ function syncDoors(F,camera){
+  const B=F.doorInstances;if(!B)return;
+  const cull=camera&&!F.shadows;if(cull)B.frustum.setFromProjectionMatrix(B.view.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+  for(const {mesh,entries}of B.batches){let count=0;for(const e of entries)if(e.parent.visible){e.parent.updateMatrix();B.matrix.multiplyMatrices(e.parent.matrix,e.local);if(cull&&!B.frustum.intersectsSphere(B.sphere.copy(mesh.geometry.boundingSphere).applyMatrix4(B.matrix)))continue;mesh.setMatrixAt(count++,B.matrix);}mesh.count=count;mesh.visible=count>0;mesh.castShadow=!!F.shadows;mesh.instanceMatrix.needsUpdate=true;}
  }
  function prepareRunner(gl){
   const root=gl.scene,clip=gl.animations.find(c=>c.duration>.2);if(!clip)throw Error('Outdoor runner has no running animation');
@@ -107,40 +144,47 @@
   W.bat.push({k:1,x:27,y:4.5,z:54});
  }
  function init(F){
-  const group=new T.Group();group.name='Courtyard and uploaded spaces';F.scene.add(group);F.world={g:group,materials:[],lights:[],outside:0,nativeScenes:[]};
+  const group=new T.Group(),props=new T.Group();group.name='Courtyard and uploaded spaces';group.add(props);F.scene.add(group);F.world={g:group,props,materials:[],lights:[],outside:0,nativeScenes:[],cullAt:-1,lampAt:-1};
   for(const p of placements){const a=assets.get(p.name);if(a){const g=a.root.clone(true);g.position.set(p.x,p.y,p.z);group.add(g);F.world.nativeScenes.push({g,p,bounds:a.bounds});}}
-  const mat=(color,options={})=>{const m=new T.MeshStandardMaterial({color,roughness:.95,...options});F.world.materials.push(m);return m;},grass=mat(0x23382c),asphalt=mat(0x202b31),curb=mat(0x68767a),wood=mat(0x65503a),metal=mat(0x263840),foliage=mat(0x173a2c),bark=mat(0x3d3930),bulb=new T.MeshBasicMaterial({color:0xffdea1});F.world.materials.push(bulb);
-  const box=(x,y,z,w,h,d,m)=>{const o=new T.Mesh(new T.BoxGeometry(w,h,d),m);o.position.set(x,y+h/2,z);group.add(o);return o;};
+  const mat=(color)=>{const m=mobile()?new T.MeshLambertMaterial({color}):new T.MeshStandardMaterial({color,roughness:.95});F.world.materials.push(m);return m;},grass=mat(0x23382c),asphalt=mat(0x202b31),curb=mat(0x68767a),wood=mat(0x65503a),metal=mat(0x263840),foliage=mat(0x173a2c),bark=mat(0x3d3930),bulb=new T.MeshBasicMaterial({color:0xffdea1});F.world.materials.push(bulb);
+  const box=(x,y,z,w,h,d,m)=>{const o=new T.Mesh(new T.BoxGeometry(w,h,d),m);o.position.set(x,y+h/2,z);props.add(o);return o;};
   for(const r of outsideRects)box((r[0]+r[2])/2,3.98,(r[1]+r[3])/2,r[2]-r[0],.02,r[3]-r[1],grass);
   box(36,4.005,73.5,6,.018,51,asphalt);box(38.5,4.005,82,72,.019,6,asphalt);
   for(const x of[31.8,40.2]){box(x,4.006,73.5,2.2,.1,51,curb);}
   const paint=new T.MeshBasicMaterial({color:0xbcb47d});F.world.materials.push(paint);
   for(let z=50;z<99;z+=4)box(36,4.03,z,.1,.005,1.7,paint);for(let x=5;x<74;x+=4)if(Math.abs(x-36)>5)box(x,4.03,82,1.7,.005,.1,paint);
   for(let k=0;k<3;k++){const y=[8,4,0][k],z=k===1?65:54;box(57,y,z,1.4,.82,.8,metal);box(57,y+.82,z,1.5,.05,.9,curb);for(const zz of[51,56,63,68])for(const x of[51,63.5])box(x,y,zz,.55,1.85,1.6,wood);}
-  for(const b of F.W.benches||[]){const g=new T.Group();g.position.set(b.x,4,b.z);g.rotation.y=b.rot;group.add(g);
+  for(const b of F.W.benches||[]){const g=new T.Group();g.position.set(b.x,4,b.z);g.rotation.y=b.rot;props.add(g);
    const add=(x,y,z,w,h,d,m)=>{const o=new T.Mesh(new T.BoxGeometry(w,h,d),m);o.position.set(x,y,z);g.add(o);};
    for(const x of[-.85,.85]){add(x,.24,0,.08,.48,.65,metal);add(x,.74,.27,.07,.5,.06,metal);}for(const z of[-.22,0,.22])add(0,.48,z,2.2,.07,.18,wood);for(const y of[.74,.96])add(0,y,.3,2.2,.15,.065,wood);
   }
   const trees=F.W.trees||[],trunkGeo=new T.CylinderGeometry(.14,.23,2.6,7),crownGeo=new T.IcosahedronGeometry(1,1),trunks=new T.InstancedMesh(trunkGeo,bark,trees.length),crowns=new T.InstancedMesh(crownGeo,foliage,trees.length*5),dummy=new T.Object3D();
-  trees.forEach((p,i)=>{dummy.position.set(p.x,4+1.3*p.size,p.z);dummy.scale.setScalar(p.size);dummy.rotation.set(0,i*.7,0);dummy.updateMatrix();trunks.setMatrixAt(i,dummy.matrix);for(let k=0;k<5;k++){const a=k*2.4+i*.8;dummy.position.set(p.x+Math.cos(a)*.65,7.2+k%2*.45,p.z+Math.sin(a)*.65);dummy.scale.set(1.35*p.size,1.3*p.size,1.35*p.size);dummy.rotation.set(i*.1,k,i*.2);dummy.updateMatrix();crowns.setMatrixAt(i*5+k,dummy.matrix);}});group.add(trunks,crowns);
-  for(const p of F.W.streetLights||[]){const pole=new T.Mesh(new T.CylinderGeometry(.045,.09,4.8,7),metal);pole.position.set(p.x,6.4,p.z);group.add(pole);box(p.x,8.62,p.z,.55,.1,.55,metal);box(p.x,8.59,p.z,.4,.04,.4,bulb);
-   const glow=new T.Mesh(new T.CircleGeometry(2.7,20),new T.MeshBasicMaterial({color:0xffdca0,transparent:true,opacity:.075,depthWrite:false}));glow.rotation.x=-Math.PI/2;glow.position.set(p.x,4.035,p.z);group.add(glow);F.world.materials.push(glow.material);
+  trees.forEach((p,i)=>{dummy.position.set(p.x,4+1.3*p.size,p.z);dummy.scale.setScalar(p.size);dummy.rotation.set(0,i*.7,0);dummy.updateMatrix();trunks.setMatrixAt(i,dummy.matrix);for(let k=0;k<5;k++){const a=k*2.4+i*.8;dummy.position.set(p.x+Math.cos(a)*.65,7.2+k%2*.45,p.z+Math.sin(a)*.65);dummy.scale.set(1.35*p.size,1.3*p.size,1.35*p.size);dummy.rotation.set(i*.1,k,i*.2);dummy.updateMatrix();crowns.setMatrixAt(i*5+k,dummy.matrix);}});trunks.frustumCulled=crowns.frustumCulled=false;props.add(trunks,crowns);F.world.trees=[trunks,crowns];
+  const glowMaterial=new T.MeshBasicMaterial({color:0xffdca0,transparent:true,opacity:.075,depthWrite:false});F.world.materials.push(glowMaterial);
+  for(const p of F.W.streetLights||[]){const pole=new T.Mesh(new T.CylinderGeometry(.045,.09,4.8,7),metal);pole.position.set(p.x,6.4,p.z);props.add(pole);box(p.x,8.62,p.z,.55,.1,.55,metal);box(p.x,8.59,p.z,.4,.04,.4,bulb);
+   const glow=new T.Mesh(new T.CircleGeometry(2.7,20),glowMaterial);glow.rotation.x=-Math.PI/2;glow.position.set(p.x,4.035,p.z);props.add(glow);
   }
-  for(let i=0;i<3;i++){const l=new T.PointLight(0xffd8a1,0,10,1.7);F.scene.add(l);F.world.lights.push(l);}
+  for(let i=0;i<(mobile()?1:3);i++){const l=new T.PointLight(0xffd8a1,0,10,1.7);F.scene.add(l);F.world.lights.push(l);}
   const ambient=F.world.ambient=new T.HemisphereLight(0x91afc6,0x16261c,0);F.scene.add(ambient);
   const sky=new T.Mesh(new T.SphereGeometry(140,20,12),new T.MeshBasicMaterial({color:0x081b2a,side:T.BackSide,fog:false}));sky.renderOrder=-2;group.add(sky);F.world.sky=sky;F.world.materials.push(sky.material);
   const moon=new T.Mesh(new T.SphereGeometry(2.2,16,12),new T.MeshBasicMaterial({color:0xcbd9d8,fog:false}));F.scene.add(moon);F.world.moon=moon;F.world.materials.push(moon.material);
+  F.world.chunks=batchStatic(props);props.updateMatrixWorld(true);
+  for(const mesh of F.world.chunks){mesh.userData.facSphere=mesh.geometry.boundingSphere.clone().applyMatrix4(mesh.matrixWorld);}
   const cfg=assets.get('outdoor-runner');if(cfg){if(cfg.owner)releaseRunner(cfg.owner);const g=new T.Group();g.add(cfg.visual);F.scene.add(g);const mix=new T.AnimationMixer(cfg.root),action=mix.clipAction(cfg.clip).play();const runner=F.runner={g,mix,action,cfg,x:25,y:4,z:68,face:0,on:true,mode:'patrol',radius:.32,height:2.12,eye:1.7,repath:0,path:null,pi:0,age:0,speed:0,lastSeen:-99,contact:0};cfg.owner=runner;}
  }
  function runnerAnimation(a,dt,speed){
   if(!a?.mix)return;a.action.paused=speed<.05;a.action.timeScale=clamp(speed/4.6,.7,1.5);a.mix.update(dt);
-  const cfg=a.cfg;cfg.visual.updateMatrixWorld(true);if(cfg.anchor){const p=cfg.anchor.getWorldPosition(new T.Vector3());cfg.offset.worldToLocal(p);cfg.offset.position.x=-p.x;cfg.offset.position.z=-p.z;}
+  const cfg=a.cfg;cfg.visual.updateMatrixWorld(true);if(cfg.anchor){const p=cfg.anchor.getWorldPosition(a.anchorPoint||(a.anchorPoint=new T.Vector3()));cfg.offset.worldToLocal(p);cfg.offset.position.x=-p.x;cfg.offset.position.z=-p.z;}
   a.g.position.set(a.x,a.y,a.z);a.g.rotation.y=a.face;
  }
  function runnerTick(F,dt){
   const a=F.runner;if(!a)return;a.age+=dt;const list=global.facPlayers(F).filter(p=>global.facAlive(p)&&enemyOutside(p));let target=null,best=Infinity;
-  for(const p of list){const d=Math.hypot(p.x-a.x,p.z-a.z);if(d<34&&d<best&&global.facSee(F,a.x,a.y+1.6,a.z,p.x,p.y+1.3,p.z,true)){target=p;best=d;}}
-  if(target){a.lastSeen=F.t;a.memory={x:target.x,y:target.y,z:target.z};if(a.mode!=='chase'){a.mode='chase';a.reactUntil=F.t+1;global.facTip(F,'Something is running toward you. Use the road and the lights.',3);global.facPS(F,a.x,a.y+1.4,a.z,o=>{global.sfxN(o,.45,.15,700,'bandpass');global.sfxT(o,84,35,.6,'sawtooth',.1);},1);}}
+  if(!list.length){a.speed=0;a.mode='patrol';a.target=null;a.senseAt=0;return;}
+  if(F.t>=(a.senseAt||0)||a.target&&!list.includes(a.target)){
+   a.senseAt=F.t+.1;
+   for(const p of list){const d=Math.hypot(p.x-a.x,p.z-a.z);if(d<34&&d<best&&global.facSee(F,a.x,a.y+1.6,a.z,p.x,p.y+1.3,p.z,true)){target=p;best=d;}}a.target=target;
+  }else target=a.target;
+  if(target){a.lastSeen=F.t;const memory=a.memory||(a.memory={});memory.x=target.x;memory.y=target.y;memory.z=target.z;if(a.mode!=='chase'){a.mode='chase';a.reactUntil=F.t+1;global.facTip(F,'Something is running toward you. Use the road and the lights.',3);global.facPS(F,a.x,a.y+1.4,a.z,o=>{global.sfxN(o,.45,.15,700,'bandpass');global.sfxT(o,84,35,.6,'sawtooth',.1);},1);}}
   else if(F.t-a.lastSeen>6)a.mode='patrol';
   const oldX=a.x,oldZ=a.z;
   if(a.mode==='chase'&&F.t>=(a.reactUntil||0)&&a.memory)global.facHauntWalk(F,a,a.memory.x,a.memory.y,a.memory.z,5.05,dt);
@@ -148,19 +192,29 @@
    if(!a.goal||Math.hypot(a.x-a.goal[0],a.z-a.goal[1])<1)a.goal=[[25,62],[36,72],[53,88],[27,94]][Math.floor(a.age/6)%4];
    global.facHauntWalk(F,a,a.goal[0],4,a.goal[1],2.15,dt);
   }
-  const dx=a.x-oldX,dz=a.z-oldZ;a.speed=Math.hypot(dx,dz)/Math.max(dt,.001);if(a.speed>.05)a.face=Math.atan2(dx,dz);runnerAnimation(a,dt,a.speed);
+  const dx=a.x-oldX,dz=a.z-oldZ;a.speed=Math.hypot(dx,dz)/Math.max(dt,.001);if(a.speed>.05)a.face=Math.atan2(dx,dz);
+  a.g.position.set(a.x,a.y,a.z);a.g.rotation.y=a.face;if(a.g.visible)runnerAnimation(a,dt,a.speed);
   for(const p of list){const close=F.t>=(a.reactUntil||0)&&Math.hypot(p.x-a.x,p.z-a.z)<.88&&global.facSee(F,a.x,5.5,a.z,p.x,p.y+1.2,p.z,true);p.runnerContact=close?(p.runnerContact||0)+dt:0;if(p.runnerContact>.3){global.facDamage(F,p,32);p.runnerContact=0;}}
  }
  function tick(F,dt,authority){
-  const S=F.world;if(!S)return;for(const o of S.nativeScenes||[]){const x=F.pl.x-o.p.x,z=F.pl.z-o.p.z,b=o.bounds,d=Math.hypot(Math.max(b.min.x-x,0,x-b.max.x),Math.max(b.min.z-z,0,z-b.max.z));o.g.visible=Math.abs(F.pl.y-4)<3&&d<42;}const out=outside(F.pl);S.outside+=(Number(out)-S.outside)*Math.min(1,dt*3);const k=S.outside;
+  const S=F.world;if(!S)return;
+  if(F.t>=S.cullAt||dt===0){S.cullAt=F.t+.12;
+   for(const o of S.nativeScenes||[]){const x=F.pl.x-o.p.x,z=F.pl.z-o.p.z,b=o.bounds,d=Math.hypot(Math.max(b.min.x-x,0,x-b.max.x),Math.max(b.min.z-z,0,z-b.max.z));o.g.visible=Math.abs(F.pl.y-4)<3&&d<42;}
+   for(const o of S.chunks){const b=o.userData.facSphere;o.visible=Math.hypot(b.center.x-F.pl.x,(b.center.y-F.pl.y)*1.2,b.center.z-F.pl.z)-b.radius<36;}
+   const nearOutside=Math.abs(F.pl.y-4)<3&&outsideRects.some(r=>Math.hypot(Math.max(r[0]-F.pl.x,0,F.pl.x-r[2]),Math.max(r[1]-F.pl.z,0,F.pl.z-r[3]))<36);for(const o of S.trees)o.visible=nearOutside;
+  }
+  const out=outside(F.pl);S.outside+=(Number(out)-S.outside)*Math.min(1,dt*3);const k=S.outside;
   S.ambient.intensity=k*.65;S.sky.visible=k>.1;S.sky.position.set(F.pl.x,0,F.pl.z);S.moon.visible=k>.1;S.moon.position.set(F.pl.x-65,65,F.pl.z-80);
   const fog=.055*(1-k)+.018*k;if(F.scene.fog)F.scene.fog.density=fog;if(F.U?.uFogD)F.U.uFogD.value=fog;
-  const lamps=(F.W.streetLights||[]).map(p=>({p,d:Math.hypot(p.x-F.pl.x,p.z-F.pl.z)})).sort((a,b)=>a.d-b.d);
+  if(F.t>=S.lampAt){S.lampAt=F.t+.25;S.nearLamps=(F.W.streetLights||[]).map(p=>({p,d:Math.hypot(p.x-F.pl.x,p.z-F.pl.z)})).sort((a,b)=>a.d-b.d);}
+  const lamps=S.nearLamps||[];
   S.lights.forEach((l,i)=>{const p=lamps[i];l.intensity=p&&p.d<12?1.8*k:0;if(p)l.position.set(p.p.x,8.5,p.p.z);});
-  if(authority)runnerTick(F,dt);
-  if(F.runner){const d=Math.hypot(F.runner.x-F.pl.x,F.runner.z-F.pl.z);F.runner.g.visible=d<65&&Math.abs(F.runner.y-F.pl.y)<3;if(enemyOutside(F.pl)&&d<18&&global.facSee(F,F.pl.x,F.pl.y+1.4,F.pl.z,F.runner.x,F.runner.y+1.5,F.runner.z,true))F.pl.fear=Math.max(F.pl.fear||0,(1-d/18)*.85);}
+  if(F.runner){const a=F.runner,d=Math.hypot(a.x-F.pl.x,a.z-F.pl.z);a.g.visible=d<45&&Math.abs(a.y-F.pl.y)<3;
+   if(authority)runnerTick(F,dt);a.g.position.set(a.x,a.y,a.z);a.g.rotation.y=a.face;
+   if(enemyOutside(F.pl)&&d<18){if(F.t>=(a.fearAt||0)){a.fearAt=F.t+.1;a.fearVisible=global.facSee(F,F.pl.x,F.pl.y+1.4,F.pl.z,a.x,a.y+1.5,a.z,true);}if(a.fearVisible)F.pl.fear=Math.max(F.pl.fear||0,(1-d/18)*.85);}
+  }
  }
  function releaseRunner(a){if(!a)return;a.mix.stopAllAction();if(a.cfg.visual.parent)a.cfg.visual.parent.remove(a.cfg.visual);a.cfg.owner=null;}
- function dispose(F){if(F.runner)releaseRunner(F.runner);F.runner=null;if(F.world){for(const m of F.world.materials)m.dispose();F.world=null;}}
- global.FacilityWorld={load,prepare,plan,init,tick,dispose,outside,enemyOutside,nativeAt,door,doorReady:()=>assets.has('hospital-door'),assets,runnerAnimation,makeColliders,clipMesh};
+ function dispose(F){if(F.runner)releaseRunner(F.runner);F.runner=null;if(F.world){for(const m of F.world.materials)m.dispose();F.world=null;}if(F.doorInstances){for(const b of F.doorInstances.batches)b.mesh.dispose?.();F.doorInstances=null;}}
+ global.FacilityWorld={load,prepare,plan,init,tick,dispose,outside,enemyOutside,nativeAt,door,syncDoors,doorReady:()=>assets.has('hospital-door'),assets,runnerAnimation,makeColliders,clipMesh,batchStatic};
 })(typeof window!=='undefined'?window:globalThis);

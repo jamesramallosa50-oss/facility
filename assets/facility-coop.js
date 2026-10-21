@@ -1,4 +1,4 @@
-/* Real WebRTC co-op for static hosting. Only the host simulates the world.
+/* Hosted HTTPS co-op. Only the host simulates the world.
    Guests send movement and interaction requests; snapshots own all shared state. */
 const FNET={version:2,build:'courtyard-r2',prefix:'facility-v1-',hz:12,max:4,timeout:25000};
 function facNetName(v){return String(v||'Survivor').replace(/[^\p{L}\p{N} _-]/gu,'').trim().slice(0,18)||'Survivor';}
@@ -102,7 +102,8 @@ function facNetSpawn(F){
   }
   return{x:s.x,y,z:s.z};
 }
-function facNetPose(p){return{x:p.x,y:p.y,z:p.z,yaw:p.yaw||0,pitch:p.pitch||0,crouch:!!p.crouch,light:!!p.light,sta:p.sta??1};}
+function facNetRound(v){return Math.round(v*1000)/1000;}
+function facNetPose(p){return{x:facNetRound(p.x),y:facNetRound(p.y),z:facNetRound(p.z),yaw:facNetRound(p.yaw||0),pitch:facNetRound(p.pitch||0),crouch:!!p.crouch,light:!!p.light,sta:facNetRound(p.sta??1)};}
 function facNetValidPose(p){return p&&['x','y','z','yaw','pitch'].every(k=>Number.isFinite(p[k]))&&p.x>0&&p.x<124&&p.z>0&&p.z<102&&p.y> -2&&p.y<13&&Math.abs(p.yaw)<1e6&&Math.abs(p.pitch)<2;}
 function facNetInput(F,conn,m){
   const C=F.coop,p=C.players.get(conn.peer);if(!p||m.version!==FNET.version)return;
@@ -155,15 +156,15 @@ function facCoopDoor(F,d){
   facNetQueue(F,{t:'door',i:F.doors.indexOf(d),want:'open'});return true;
 }
 function facNetSnapshot(F){
-  const C=F.coop,dm=F.dm,a=F.haunt?.active;
-  return{version:FNET.version,build:FNET.build,room:C.room,epoch:C.epoch,t:F.t,stage:F.stage,held:F.held,fuses:F.fuses,breaker:F.brk.n,powerT:F.powerT||0,
-    lift:{open:F.lift.open,want:F.lift.want,arrive:F.lift.arrive},power:F.U.uPow.value,emergency:F.U.uEmg.value,outcome:C.outcome,
-    players:[{...facNetPose(F.pl),id:C.id,name:C.name,hp:F.pl.hp,downed:F.pl.downed,hit:F.pl.hit||0,ack:0,loading:false},
-      ...[...C.players.values()].map(p=>({...facNetPose(p),id:p.netId,name:p.name,hp:p.hp,downed:p.downed,hit:p.hit||0,ack:p.ack,batteryPicks:p.batteryPicks||0,loading:p.loading,offline:!!p.offline}))],
-    doors:F.doors.map(d=>[d.th,d.tgt,!!d.lock]),fuseItems:F.fz.map(f=>[f.x,f.y,f.z,!!f.got]),batteries:F.bats.map(b=>[b.x,b.y,b.z,!!b.got]),
-    dm:{x:dm.x,y:dm.y,z:dm.z,face:dm.face,on:dm.on,st:dm.st,spd:dm.actualSpeed||0},
-    runner:F.runner?{x:F.runner.x,y:F.runner.y,z:F.runner.z,face:F.runner.face,speed:F.runner.speed,mode:F.runner.mode}:null,
-    haunt:a?{kind:a.kind,serial:a.serial,x:a.x,y:a.y,z:a.z,face:a.g.rotation.y,mode:a.mode,revealed:a.revealed,age:a.age,speed:a.netSpeed||0}:null};
+  const C=F.coop,dm=F.dm,a=F.haunt?.active,q=facNetRound;
+  return{version:FNET.version,build:FNET.build,room:C.room,epoch:C.epoch,t:q(F.t),stage:F.stage,held:F.held,fuses:F.fuses,breaker:F.brk.n,powerT:q(F.powerT||0),
+    lift:{open:q(F.lift.open),want:F.lift.want,arrive:q(F.lift.arrive)},power:q(F.U.uPow.value),emergency:q(F.U.uEmg.value),outcome:C.outcome,
+    players:[{...facNetPose(F.pl),id:C.id,name:C.name,hp:q(F.pl.hp),downed:F.pl.downed,hit:F.pl.hit||0,ack:0,loading:false},
+      ...[...C.players.values()].map(p=>({...facNetPose(p),id:p.netId,name:p.name,hp:q(p.hp),downed:p.downed,hit:p.hit||0,ack:p.ack,batteryPicks:p.batteryPicks||0,loading:p.loading,offline:!!p.offline}))],
+    doors:F.doors.map(d=>[q(d.th),q(d.tgt),!!d.lock]),fuseItems:F.fz.map(f=>[q(f.x),q(f.y),q(f.z),!!f.got]),batteries:F.bats.map(b=>[q(b.x),q(b.y),q(b.z),!!b.got]),
+    dm:{x:q(dm.x),y:q(dm.y),z:q(dm.z),face:q(dm.face),on:dm.on,st:dm.st,spd:q(dm.actualSpeed||0)},
+    runner:F.runner?{x:q(F.runner.x),y:q(F.runner.y),z:q(F.runner.z),face:q(F.runner.face),speed:q(F.runner.speed),mode:F.runner.mode}:null,
+    haunt:a?{kind:a.kind,serial:a.serial,x:q(a.x),y:q(a.y),z:q(a.z),face:q(a.g.rotation.y),mode:a.mode,revealed:a.revealed,age:q(a.age),speed:q(a.netSpeed||0)}:null};
 }
 function facNetWorld(F,m){
   const C=F.coop;
@@ -206,7 +207,7 @@ function facNetVisuals(F,dt){
   for(const p of C.players.values()){
     if(p.loading||p.offline){const a=C.avatars.get(p.netId);if(a)a.g.visible=false;continue;}
     const a=facNetAvatar(F,p),g=a.g,k=1-Math.exp(-dt*18),distance=Math.hypot(p.x-g.position.x,p.z-g.position.z),moving=distance>.025;
-    if(distance>4)g.position.set(p.x,p.y,p.z);else g.position.lerp(new T.Vector3(p.x,p.y,p.z),k);
+    if(distance>4)g.position.set(p.x,p.y,p.z);else{g.position.x+=(p.x-g.position.x)*k;g.position.y+=(p.y-g.position.y)*k;g.position.z+=(p.z-g.position.z)*k;}
     let turn=p.yaw-g.rotation.y;turn=Math.atan2(Math.sin(turn),Math.cos(turn));g.rotation.y+=turn*k;
     g.rotation.z=0;g.scale.y=p.downed?.3:p.crouch?.7:1;
     if(moving)a.phase+=dt*10;const swing=moving&&!p.downed?Math.sin(a.phase)*.5:0;
@@ -217,7 +218,7 @@ function facNetVisuals(F,dt){
     const m=C.world.dm,dm=F.dm,k=1-Math.exp(-dt*20);dm.x+=(m.x-dm.x)*k;dm.y+=(m.y-dm.y)*k;dm.z+=(m.z-dm.z)*k;
     dm.face+=Math.atan2(Math.sin(m.face-dm.face),Math.cos(m.face-dm.face))*k;dm.fwant=dm.face;dm.on=m.on;dm.st=m.st;F.dmDist=m.on?Math.hypot(dm.x-F.pl.x,dm.y-F.pl.y,dm.z-F.pl.z):99;
     facDmBody(F,dt,m.spd);const S=F.haunt,h=C.world.haunt;
-    if(F.runner&&C.world.runner){const r=C.world.runner,a=F.runner;for(const axis of['x','y','z'])a[axis]+=(r[axis]-a[axis])*k;a.face+=Math.atan2(Math.sin(r.face-a.face),Math.cos(r.face-a.face))*k;a.speed=r.speed;a.mode=r.mode;window.FacilityWorld.runnerAnimation(a,dt,a.speed);}
+    if(F.runner&&C.world.runner){const r=C.world.runner,a=F.runner;for(const axis of['x','y','z'])a[axis]+=(r[axis]-a[axis])*k;a.face+=Math.atan2(Math.sin(r.face-a.face),Math.cos(r.face-a.face))*k;a.speed=r.speed;a.mode=r.mode;if(a.g.visible)window.FacilityWorld.runnerAnimation(a,dt,a.speed);}
     if(S){
       if(!h){if(S.active){S.active.g.visible=false;S.active.on=false;}S.active=null;}
       else{const a=S.actors.find(a=>a.kind===h.kind);if(a){if(S.active&&S.active!==a)S.active.g.visible=false;if(a.serial!==h.serial){a.stung=false;a.serial=h.serial;}S.active=a;Object.assign(a,h,{on:true});a.g.position.set(h.x,h.y,h.z);a.g.rotation.y=h.face;a.g.visible=!!h.revealed;
@@ -234,7 +235,7 @@ function facCoopTick(F,dt){
   if(!C.ready){facNetScreen(F,C.error||(C.host?'Creating your room…':'Waiting for the host to synchronize the Facility…'),!!C.error);return false;}
   if(C.host){
     for(const p of C.players.values()){p.offline=now-p.seen>10000;if(now-p.seen>30000){C.connections.get(p.netId)?.close();}}
-    if(now>=C.sendAt){C.sendAt=now+1000/FNET.hz;const data={type:'world',...facNetSnapshot(F)};for(const conn of C.connections.values())facNetSend(conn,data);}
+    if(now>=C.sendAt){C.sendAt=now+1000/FNET.hz;let data;for(const conn of C.connections.values())if(conn.open){data=data||{type:'world',...facNetSnapshot(F)};facNetSend(conn,data);}}
   }else if(now>=C.sendAt){C.sendAt=now+1000/FNET.hz;facNetSend(C.connection,{type:'input',version:FNET.version,pose:facNetPose(F.pl),actions:C.actions});}
   facNetVisuals(F,dt);
   if(C.outcome&&!HZ.dead&&!HZ.won){if(C.outcome==='won')facWin(F);else facDie(F);}

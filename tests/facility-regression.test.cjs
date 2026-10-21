@@ -410,7 +410,7 @@ test('room parameters survive the game loader and asset updates invalidate old g
   const script=[...fs.readFileSync(path.join(root,'game.html'),'utf8').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)][0][1];
   vm.runInNewContext(script,{URL,location,document:{getElementById:()=>link}});const u=new URL(location.redirect);
   assert.equal(u.searchParams.get('room'),'ABC234');assert.equal(u.searchParams.get('coop'),'join');assert.equal(u.searchParams.get('name'),'Kai');assert.equal(u.searchParams.get('facility'),'1');
-  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-courtyard-r2-20261021'));assert(!sw.includes("pathname.includes('/assets/')"));
+  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-performance-r3-20261021'));assert(!sw.includes("pathname.includes('/assets/')"));
   const code=fs.readFileSync(path.join(root,'index.html'),'utf8');assert(code.includes('PLAY CO-OP'));assert(code.includes('facility-menu.js'));assert(html.includes('assets/facility-coop.js'));
 });
 
@@ -499,6 +499,27 @@ test('the uploaded hospital frame stays fixed while the visible leaf follows the
   d.mesh.updateMatrixWorld(true);const size=new T.Box3().setFromObject(d.mesh).getSize(new T.Vector3());assert(size.y>2.15&&size.y<2.35);
   const b=new T.Box3().setFromObject(d.fixedFrame);assert(b.max.y-b.min.y<2.35);assert(d.mesh.children[0].geometry.userData.facShared);
 });
+test('native doors use shared draw batches while retaining each moving hinge and fixed frame',async()=>{
+  const {ctx,F}=await worldHarness(),world=ctx.FacilityWorld,doors=F.doors;
+  assert(F.doorInstances.batches.length<=4,'Repeated native doors should share a small number of draw calls');
+  doors.forEach((d,i)=>{d.mesh.visible=i<3;d.fixedFrame.visible=i<3;});
+  const d=doors[1];d.mesh.rotation.y=-d.a0-.9;world.syncDoors(F);
+  for(const batch of F.doorInstances.batches){
+    world.syncDoors(F);assert.equal(batch.mesh.count,3);assert.equal(batch.mesh.frustumCulled,false);
+    const actual=new T.Matrix4(),expected=new T.Matrix4();batch.mesh.getMatrixAt(1,actual);
+    const entry=batch.entries[1];entry.parent.updateMatrix();expected.multiplyMatrices(entry.parent.matrix,entry.local);
+    for(let i=0;i<16;i++)assert(Math.abs(actual.elements[i]-expected.elements[i])<1e-5,'Instance must follow the exact visible/physical transform');
+    const before=actual.clone();d.mesh.rotation.y-=.3;world.syncDoors(F);batch.mesh.getMatrixAt(1,actual);
+    if(entry.parent===d.fixedFrame)assert(actual.equals(before),'The frame must remain stationary');
+    else assert(!actual.equals(before),'The leaf must rotate');
+    d.mesh.rotation.y+=.3;
+  }
+  doors.forEach((d,i)=>{d.mesh.visible=i===0;d.fixedFrame.visible=i===0;});
+  const front=doors[0],camera=new T.PerspectiveCamera(74,1,.1,100);camera.position.set(front.cx,front.y+1.2,front.cz-4);camera.lookAt(front.cx,front.y+1.2,front.cz);camera.updateMatrixWorld(true);
+  world.syncDoors(F,camera);assert(F.doorInstances.batches.some(b=>b.mesh.count>0));
+  camera.lookAt(front.cx,front.y+1.2,front.cz-100);camera.updateMatrixWorld(true);world.syncDoors(F,camera);assert(F.doorInstances.batches.every(b=>b.mesh.count===0),'A batched door behind the camera must not consume triangles');
+  doors.forEach(d=>{d.mesh.visible=true;d.fixedFrame.visible=true;});world.syncDoors(F);
+});
 test('the outdoor runner retains the uploaded skin and real running motion without root drift',async()=>{
   const {ctx,F}=await worldHarness(),asset=ctx.FacilityWorld.assets.get('outdoor-runner');
   F.W.trees=[];F.W.benches=[];F.W.streetLights=[];ctx.FacilityWorld.init(F);const runner=F.runner;
@@ -511,7 +532,7 @@ test('the outdoor runner retains the uploaded skin and real running motion witho
   ctx.FacilityWorld.dispose(F);
 });
 test('the persistent hunter never disappears after an ordinary chase or cinematic crossing',()=>{
-  const {ctx,A,F}=hunter();ctx.facOnScreen=()=>false;ctx.facDmGo=()=> 'there';
+  const {ctx,A,F}=hunter();ctx.Math=Object.create(Math);ctx.Math.random=()=>.9;ctx.facOnScreen=()=>false;ctx.facDmGo=()=> 'there';
   F.dm.st='cross';F.dm.cross=[12,4,8];F.dm.stT=5;F.dm.vis=false;A.facDemonTick(F,.05);assert.equal(F.dm.st,'prowl');assert(F.dm.on);
   F.dm.st='withdraw';F.dm.stT=5;A.facDemonTick(F,.05);assert.equal(F.dm.st,'prowl');assert(F.dm.on);
   for(let i=0;i<200;i++){F.t+=.05;A.facDirector(F,.05);}assert(F.dm.on);
@@ -550,4 +571,73 @@ test('all three guests spawn in clear floor space without overlapping the host o
   assert(players.every(a=>Math.hypot(p.x-a.x,p.z-a.z)>.64),'Guest bodies should be separated at spawn');
   F.coop.players.set('guest'+i,{...p,hp:100,netId:'guest'+i});players.push(p);
  }
+});
+
+
+test('mobile rendering avoids multisample buffers and starts at a bounded resolution',()=>{
+  const {ctx,F}=harness();ctx.isTouch=true;ctx.devicePixelRatio=3;ctx.gameEl={clientWidth:900,clientHeight:400};ctx.qFactor=()=>1.5;ctx.qMode=()=> 'auto';
+  ctx.renderer={capabilities:{isWebGL2:true},domElement:{width:0,height:0},setSize(w,h){this.domElement.width=w;this.domElement.height=h;}};
+  vm.runInContext(section('function facPost(){','/* ---------- your hand and flashlight:')+section('function facSize(F){','function facTick(dt){'),ctx);
+  const post=ctx.facPost();assert(!post.rt.isWebGLMultisampleRenderTarget,'Phones must avoid the four-sample color/depth target');
+  F.post=post;ctx.facSize(F);assert.equal(post.h,480);assert.equal(post.w,1080);
+  F.rs=.5;ctx.facSize(F);assert.equal(post.h,360,'Adaptive resolution must retain a readable lower bound');
+  ctx.isTouch=false;const desktop=ctx.facPost();assert.equal(desktop.rt.samples,4,'Desktop antialiasing remains available');post.dispose();desktop.dispose();
+});
+test('static batching preserves transformed triangles, bounds and materials',()=>{
+  const {ctx,F}=harness();vm.runInContext(fs.readFileSync(path.join(root,'assets/facility-world.js'),'utf8'),ctx);
+  const group=new T.Group(),bench=new T.Group(),material=new T.MeshLambertMaterial();group.add(bench);bench.position.set(4,4,5);bench.rotation.y=.6;
+  for(let i=0;i<9;i++){const m=new T.Mesh(new T.BoxGeometry(.2,.4,.6),material);m.position.x=i*.4;bench.add(m);}
+  const before=new T.Box3().setFromObject(group),chunks=ctx.FacilityWorld.batchStatic(group),after=new T.Box3().setFromObject(group);
+  assert(chunks.length<9);assert(before.min.distanceTo(after.min)<1e-5&&before.max.distanceTo(after.max)<1e-5);
+  let triangles=0;group.traverse(o=>{if(o.isMesh){assert.equal(o.material,material);triangles+=o.geometry.index.count/3;}});assert.equal(triangles,9*12);
+});
+test('mobile uploaded scenery keeps its texture with a cheaper vertex-lit material',()=>{
+  const {ctx}=harness();ctx.matchMedia=()=>({matches:true});vm.runInContext(fs.readFileSync(path.join(root,'assets/facility-world.js'),'utf8'),ctx);
+  const source=new T.MeshStandardMaterial({color:0x997755,map:new T.Texture()}),scene=new T.Group();scene.add(new T.Mesh(new T.BoxGeometry(1,2,1),source));
+  const asset=ctx.FacilityWorld.prepare('garage',{scene});asset.root.traverse(o=>{if(o.isMesh){assert(o.material.isMeshLambertMaterial);assert.equal(o.material.map,source.map);assert(o.material.color.equals(source.color));}});
+});
+test('hunter perception is shared at ten hertz and immediately drops an invalid target',()=>{
+  const {ctx,A,F}=hunter(),guest={...F.pl,netId:'guest',hp:100};F.coop={host:true,players:new Map([['guest',guest]])};let checks=0;
+  ctx.facDmSee=(F,p)=>{checks++;return p===guest?1:0;};
+  for(let i=0;i<600;i++){F.t+=1/60;assert.equal(A.facHuntTarget(F),guest);A.facHuntTarget(F);}
+  assert(checks<=202,'Repeated AI/director calls must share perception instead of raycasting each frame: '+checks);
+  guest.downed=true;assert.equal(A.facHuntTarget(F),F.pl,'Downed targets cannot wait for the perception timer');
+});
+test('an empty outdoor sector does no runner navigation or skeletal animation work',async()=>{
+  const {ctx,F}=await worldHarness();ctx.FacilityWorld.init(F);F.coop=null;Object.assign(F.pl,{x:11,y:4,z:8,hp:100,downed:false});
+  let walks=0,animations=0;const walk=ctx.facHauntWalk,mix=F.runner.mix.update.bind(F.runner.mix);ctx.facHauntWalk=()=>{walks++;};F.runner.mix.update=dt=>{animations++;mix(dt);};
+  const start=[F.runner.x,F.runner.z];for(let i=0;i<120;i++){F.t+=1/60;ctx.FacilityWorld.tick(F,1/60,true);}
+  assert.equal(walks,0);assert.equal(animations,0);assert.deepEqual([F.runner.x,F.runner.z],start);
+  const guest={...F.pl,x:36,z:70,netId:'guest'};F.coop={players:new Map([['guest',guest]])};ctx.facSee=()=>true;
+  F.t+=.2;ctx.FacilityWorld.tick(F,.05,true);assert.equal(F.runner.mode,'chase','An outdoor guest must wake the runner while the host stays inside');
+  F.t+=1.2;ctx.FacilityWorld.tick(F,.05,true);assert(walks>0);ctx.facHauntWalk=walk;F.coop=null;ctx.FacilityWorld.dispose(F);
+});
+test('a host generates no snapshots until an open guest connection exists',()=>{
+  const {ctx,A,F}=coopWorld(harness());F.coop.ready=true;let now=0,snapshots=0,sent=0;ctx.performance={now:()=>now};
+  const original=ctx.facNetSnapshot;ctx.facNetSnapshot=F=>{snapshots++;return original(F);};
+  F.coop.connections.set('loading',{open:false});
+  for(let i=0;i<120;i++){now=i*17;A.facCoopTick(F,1/60);}assert.equal(snapshots,0);
+  F.coop.connections.set('guest',{open:true,send(){sent++;}});now+=100;A.facCoopTick(F,1/60);assert.equal(snapshots,1);assert.equal(sent,1);
+});
+test('four-player snapshots fit one relay fragment with millimetre pose precision',()=>{
+  const {ctx,A,F}=coopWorld(harness());A.facDoorsInit(F,{});
+  F.fz=F.W.fuse.flat().map(f=>({...f,y:A.FCY[f.k]+1.137128937}));F.bats=F.W.bat.map(b=>({...b,y:A.FCY[b.k]+.425372859}));
+  for(const d of F.doors){d.th=Math.PI*.37;d.tgt=Math.PI*.51;}
+  for(let i=1;i<4;i++)F.coop.players.set('p'+i,{...F.pl,x:11.123456789+i,yaw:Math.PI/3,sta:.673495827,hp:89.75338455,netId:'p'+i,name:'Survivor '+i,ack:3});
+  const snapshot=A.facNetSnapshot(F),bytes=JSON.stringify(snapshot).length;assert(bytes<8500,'Whole scene should fit one transport fragment: '+bytes);
+  for(const p of snapshot.players){const original=p.id===F.coop.id?F.pl:F.coop.players.get(p.id);assert(Math.abs(original.x-p.x)<=.00051);}
+  assert.equal(snapshot.doors[0][0],1.162);console.info('Four-player snapshot bytes:',bytes);
+});
+
+
+test('service worker preserves downloaded models across builds while refreshing gameplay code',async()=>{
+  const origin='https://facility-g5iq.vercel.app',model=new Request(origin+'/assets/world/office.glb?v=courtyard-r2'),stores=new Map(),handlers={};let fetched=0;
+  const cache=key=>{if(!stores.has(key))stores.set(key,new Map());const data=stores.get(key);return{async match(r){return data.get(r.url||r)?.clone();},async put(r,v){data.set(r.url||r,v.clone());},async keys(){return [...data.keys()].map(u=>new Request(u));}};};
+  await cache('facility-courtyard-r2-20261021').put(model,new Response('downloaded-model'));
+  const self={addEventListener(n,fn){handlers[n]=fn;},clients:{async claim(){}},skipWaiting(){}},caches={async keys(){return [...stores.keys()];},async open(k){return cache(k);},async delete(k){return stores.delete(k);}};
+  vm.runInNewContext(fs.readFileSync(path.join(root,'sw.js'),'utf8'),{self,caches,URL,location:{origin},fetch:async()=>{fetched++;return new Response('fresh-code');}});
+  let task;handlers.activate({waitUntil(p){task=p;}});await task;assert(!stores.has('facility-courtyard-r2-20261021'));
+  handlers.fetch({request:model,respondWith(p){task=p;}});assert.equal(await (await task).text(),'downloaded-model');assert.equal(fetched,0);
+  handlers.fetch({request:new Request(origin+'/game-core.html'),respondWith(p){task=p;}});assert.equal(await (await task).text(),'fresh-code');assert.equal(fetched,1);
+  let handled=false;handlers.fetch({request:new Request(origin+'/api/facility-room'),respondWith(){handled=true;}});assert(!handled,'Room API must always bypass the worker');
 });

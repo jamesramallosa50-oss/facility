@@ -27,9 +27,9 @@
    if(this.closed)return;const key=to+':'+(data.type||'packet');this.queue.set(key,{to,data});
   }
   packets(){
-   const list=[];let bytes=0;
+   const list=[],encoded=new Map();let bytes=0;
    for(const [key,p]of this.queue){
-    const text=JSON.stringify(p.data),id=++this.serial,n=Math.ceil(text.length/8500),chunks=[];
+    let text=encoded.get(p.data);if(text===undefined){text=JSON.stringify(p.data);encoded.set(p.data,text);}const id=++this.serial,n=Math.ceil(text.length/8500),chunks=[];
     for(let i=0;i<n;i++)chunks.push({to:p.to,data:{facility:2,id,part:i,n,body:text.slice(i*8500,(i+1)*8500)}});
     const size=JSON.stringify(chunks).length;if(list.length+chunks.length>12||bytes+size>59000)break;
     list.push(...chunks);bytes+=size;this.queue.delete(key);

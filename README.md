@@ -15,6 +15,18 @@ Search three floors, collect one fuse per floor, power the basement breaker and 
 
 The six new models total about **12.8 MB**, down from about **97.5 MB** of source files. Textures are capped at 512 pixels. Original meshes, material assignments, the outdoor character's skeleton and its running clip are retained. Static walls and furniture generate collision boxes from the imported triangles. The Backrooms model has a cut entrance matching its physical doorway. Shared imported geometry survives retries, while per-run graphics and connections are disposed.
 
+## Mobile performance
+
+Auto graphics on touch devices starts at 480 render lines, adapts down to 360 under load, and skips the four-sample offscreen buffer and flashlight shadow pass. Explicit High/Ultra settings can still enable shadows. Uploaded scenery and hospital doors use vertex-lit textured materials on phones; the courtyard uses one nearby dynamic lamp rather than three. Desktop lighting remains available.
+
+Static scenery merges by material and 12-metre area. Native hospital frames and moving leaves share instanced draw batches; their original geometry, hinge transforms and collisions remain intact. Batches contain only nearby, visible door instances, while shadow-enabled views retain their shadow casters. Distant scenery is checked at a fixed cadence.
+
+Monster movement and contact damage still run every frame. Shared target visibility runs at ten hertz, path requests respect their planning interval, and hidden hunter animation runs less often. The courtyard runner stops navigation and animation while all living players are inside, and wakes for an outdoor guest even if the host is indoors. Health writes occur only when its value/state changes, and the rest of the HUD updates at ten hertz.
+
+An empty hosted room builds no world snapshots. Network positions and door angles use three decimal places; a shared packet is serialized once per outgoing relay batch. The service worker retains downloaded native models across build upgrades and reuses them on later loads, while gameplay code refreshes from the network.
+
+In the Node scene fixture, the added environments/courtyard/doors use **182 draw objects instead of 486** with all those objects visible. A four-player snapshot shrank from **5,963 to 3,498 characters**. Ten seconds of repeated two-player target selection used **172 sight checks instead of 2,400**, and three seconds with an empty outdoor sector used **zero runner path/animation updates instead of 180 each**. These count workload reductions, not device FPS; browser rendering and a physical-phone session still need playtesting.
+
 ## Online rooms
 
 Choose **PLAY CO-OP → CREATE A ROOM**, wait for the code in the HUD, then use **INVITE** or share the six-character code. Friends choose **JOIN ROOM**. The host must keep the game tab active.
@@ -42,8 +54,8 @@ The freight lift arrives 24 seconds after all three fuses are installed. Close d
 
 Deploy the repository to Vercel to serve the game and the Node.js function in `api/facility-room.js`. Solo play also works with a local static server, for example `python -m http.server 8000` and `http://localhost:8000/`. A static server alone cannot execute the multiplayer API.
 
-Run `node --test tests/facility-regression.test.cjs`. Coverage includes source parsing, geometry, routes, physical door sweeps, native hospital frames/hinges, joystick and stamina behavior, uploaded creature rigs, pursuit/cover rules, health and revives, four-client hosted room packets, transient request recovery, late joins, API boundaries, extension/Backrooms reachability and native outdoor running animation.
+Run `node --test tests/facility-regression.test.cjs` (56 checks). Coverage includes source parsing, geometry, routes, physical door sweeps, native hospital frames/hinges, joystick and stamina behavior, uploaded creature rigs, pursuit/cover rules, health and revives, four-client hosted room packets, transient request recovery, late joins, API boundaries, extension/Backrooms reachability and native outdoor running animation, instanced door transforms/view culling, mobile render buffers/materials, static batching, AI cadence/sleeping, compact packets, empty-room snapshots and model-cache migration.
 
 A real hosted-service test also connected four distinct clients, delivered shared world messages to all three guests and rejected a fifth. Browser rendering, actual touch controls and a simultaneous physical-device play session still need playtesting.
 
-The active build is `courtyard-r2-20261021`. Both entry HTML files and `game-core.html` load this build. The service worker bypasses `/api/` entirely and uses network-first caching for gameplay scripts. Attribution is in [CREDITS.md](CREDITS.md).
+The active build is `performance-r3-20261021`. Both entry HTML files and `game-core.html` load this build. The service worker bypasses `/api/` entirely and uses network-first caching for gameplay scripts. Attribution is in [CREDITS.md](CREDITS.md).
