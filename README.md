@@ -1,51 +1,49 @@
-# THE FACILITY — Co-op Survival
+# THE FACILITY — Night Courtyard
 
-Open `index.html` through a local static web server, or deploy this folder unchanged to a static host.
+[Play The Facility](https://facility-g5iq.vercel.app/)
 
-**PLAY SOLO** starts a single-player run. **PLAY CO-OP** creates or joins an online room for up to four players. Explore two connected wings on three floors, find one fuse per floor, install the fuses in the basement breaker, and survive until the freight lift arrives.
+Search three floors, collect one fuse per floor, power the basement breaker and reach the freight lift. Play solo or create a hosted room for up to four people.
 
-A local static server is recommended because the game loads the demon GLB and audio from `assets/horror/`. For example: `python -m http.server 8000` then visit `http://localhost:8000/The-Facility/` from the parent folder.
+## This build
 
-The new wing adds twelve rooms, including a botanical lab, observation and research rooms, a medical ward, morgue, surgery, quarantine, containment, cryogenics, turbines, records and decontamination. Looped corridors and another three-floor stairwell connect them. Warm and cool baked lighting, planting beds, medical furniture, machinery and illuminated signs distinguish the areas. Fuse and battery locations include the extension.
+- The world is **124 × 102 metres**. Six new annex rooms are 15.5 × 11.5 metres, with longer corridors and return routes on all three floors.
+- A service exit connects the original building to a night courtyard with roads, marked lanes, pavements, street lights, trees and benches. The uploaded garage, store and office sit in the outdoor area. A road connects to the uploaded full Backrooms maze.
+- The uploaded hospital door supplies both the fixed frame and the moving leaf. The leaf uses the same hinge, width and angle as its collision body. Frames stay fixed and follow door visibility culling. The hunter waits for sufficient physical clearance and follows door-centre waypoints.
+- The main hunter remains in the building after a pursuit instead of randomly vanishing. It walks at 2 m/s, investigates at 3.1 m/s and chases at 4.9–5.16 m/s; your sprint is 5.9 m/s. It searches the last seen position, listens for movement, loses visual tracking behind cover and can take a physical side step to free itself from a corner. A 22-second opening grace and recognition/reveal warnings give you time to react.
+- **Run Forward Horror Tale Ethan** is the outdoor hunter, using the uploaded skin and native running clip. It patrols the courtyard, spots players through real lines of sight and accelerates to 5.05 m/s after a one-second reaction window. It can pursue a guest and follow a player into the outdoor buildings/Backrooms sector. Its running animation cannot drift away from its collision body.
+- The uploaded wolf spider and Unvermeidlich ghost remain inside. The spider pursues at 4.65 m/s and deals 22 damage on a close lunge. Apparitions remain brief encounters; the main hunter stays active.
 
-The original hunter is joined by the animated wolf spider and the uploaded Unvermeidlich ghost: opening doors can reveal a creature; the ghost watches or crosses corridors, while the spider can spot and pursue you. Doors slam or knock, and brief blackouts interrupt the lighting. The procedural humanoid placeholder stays removed. The Wraith uses the user's supplied Unvermeidlich model, with its four native animations and original 70-joint skin. It appears behind the east-wing observation, morgue and cryogenics doors and in corridor encounters. Extra encounters pause during the main hunter's chase and use simulation timers, so pausing freezes them.
+The six new models total about **12.8 MB**, down from about **97.5 MB** of source files. Textures are capped at 512 pixels. Original meshes, material assignments, the outdoor character's skeleton and its running clip are retained. Static walls and furniture generate collision boxes from the imported triangles. The Backrooms model has a cut entrance matching its physical doorway. Shared imported geometry survives retries, while per-run graphics and connections are disposed.
 
-The Crawler now uses the uploaded rigged wolf spider, with its original skeleton and native walking/running animations. The runtime GLB is about 2.3 MB, reduced from 23 MB by optimizing textures and removing unused animation data. The spider is now about twice its previous size: its animated length is approximately 1.8 m instead of 0.92 m. Its collision body and eye height are enlarged, gait timing matches the longer stride, and the leg spread narrows near real doorways before returning to full width in open rooms. Animated pose bounds set its scale and ground offset; it faces the direction it travels and pauses its gait when blocked. Door waypoints use the centre of the opening, opening requests are throttled, and proximity scares require a clear line of sight on the same floor. The cached rig is safely detached and reattached on retries. Artist attribution and modification details are in [CREDITS.md](CREDITS.md).
+## Online rooms
 
-Spider pursuit: the uploaded rigged spider now accelerates to 4.65 m/s, above your 3.15 m/s walk and below your 5.9 m/s sprint. It gives a 0.85-second reaction window (1.1 seconds after a door reveal), follows the last visible position, and gives up after 3.5 seconds without sight. After sixteen seconds it tires to 4.05 m/s; an encounter lasts at most 28 seconds. A visible close lunge deals 22 health damage and ends that encounter. Walls and other floors still block attacks.
+Choose **PLAY CO-OP → CREATE A ROOM**, wait for the code in the HUD, then use **INVITE** or share the six-character code. Friends choose **JOIN ROOM**. The host must keep the game tab active.
 
-The shared encounter path follower now checks the actual collision capsule before taking a direct route, opens physical doors once, skips reached waypoints without pausing, and allows clearance around furniture corners. Its larger search budget supports the expanded map. Gait still follows actual movement, so a blocked spider does not run in place.
+Co-op uses same-origin HTTPS requests to `/api/facility-room`, which relays packets through the owner's existing hosted four-seat room service. It does not need WebRTC negotiation, open peer-to-peer ports, a camera or a microphone. Room seat tokens stay in memory and are verified by the room service. The API checks request origin and packet size, limits message batches and disables caching. The upstream URL can be replaced with the `FACILITY_ROOM_SERVICE` environment variable; no account credentials are embedded in browser code.
 
-Emergency wall lamps now resolve a real air/solid wall boundary, including positions authored inside a wall. The entire backplate must have solid support and clear space in front. Each fixture has a flush metal housing, recessed luminous lens and protective cage; standalone emissive cubes are removed. Unsupported lamps produce no geometry, halo or baked light. Corrected mount coordinates also drive the lighting bake and halos.
+The host owns monster AI, health, doors, shared pickups, breaker progress and the lift. Guests send responsive local movement and numbered interaction requests. World snapshots coalesce during slow connections, fragments are reassembled before use and unacknowledged actions repeat safely. Transient HTTP failures retry the same room seat. Late joins receive the current world; full or closed rooms show clear errors. Pause opens local settings while the room continues to run. There is no host migration.
 
-Wayfinding uses fitted, high resolution lettering on backed wall placards. Room labels sit above door headers; direction signs mount on solid corridor walls. Every panel is checked for solid wall support and empty space in front, including its corners. Unsupported signs are not drawn.
+Teammates wear bright, emissive suits and helmets with floating name labels. The roster shows health and distance; bodies remain visible on the same floor at normal game distances, with ordinary world occlusion.
 
-Hunter behavior: a 22-second opening grace, a recognition warning and a 1.2-second reveal window give you time to react. Chase speed is 4.6–4.86 m/s. The former eight-second slowdown below walking speed is removed; after eighteen seconds it eases to 88% speed, still faster than walking. It now takes a direct route only after checking its actual collision capsule, animates according to distance moved, and restores an invalid or detached body. Losing sight for 3.2 seconds (four during the finale) ends the chase and gives fourteen seconds of recovery. Sounds lead to investigation. A hit requires 0.4 seconds of visible close contact on the same floor, deals 28 damage, and grants 1.4 seconds of protection against repeat contact. Closed doors, floors and reveal animations prevent attacks. The final alarm attracts it to the breaker; the lift arrives in 24 seconds.
+## Health and controls
 
-Map dimensions: the expansion increased the world grid from 48 × 40 m to 70 × 50 m and added twelve rooms across three floors. Original room dimensions were retained. The botanical lab is 15.5 × 10 m, records and quarantine are 10 × 8.5 m, and the new corridor loops are 2.5 m wide.
+You start with 100 health. Hunter hits deal 28 damage and outdoor hits deal 32, followed by 1.4 seconds of protection against repeated contact. All damaging attacks require sustained close contact and a clear line of sight on the same floor. Health recovers at four points per second after twelve seconds without damage and outside a chase.
 
+At zero health in co-op, you are downed. A teammate can press **E / USE** within 2.2 metres and with a clear line of sight to revive you to 40 health, with three seconds of protection. The run ends if everyone is down. A living teammate reaching the open lift car wins for the team.
 
-## Health and co-op
+- **WASD / joystick:** walk. Pushing the joystick fully forward always walks.
+- **Shift / SPRINT:** run. Sprint reserve is 30 seconds; recovery starts after 0.35 seconds.
+- **E / USE:** doors, items, breaker, nearby teammate revive.
+- **F / LIGHT:** flashlight. **C / CROUCH:** move quietly.
 
-- You start with **100 health**. A separate, always-visible vitals bar shows remaining health and critical status. After twelve seconds without a hit and outside a chase, health recovers at four points per second.
-- Choose **PLAY CO-OP → CREATE A ROOM**. Wait for the room code in the game HUD, then use **INVITE** to copy a link or share the six-character code. Friends choose **JOIN ROOM** on their own devices. Every player runs the same current build.
-- The host runs one world simulation and sends snapshots fifteen times per second. The team shares doors, fuse locations, collected items, breaker progress, lift state, monster positions and health. Only the host accepts interactions, damage and revives; repeated pickup requests cannot duplicate items. Player movement is local, with interpolated teammate bodies and monster movement on guests. Both the hunter and spider can pursue guests.
-- At zero health you are **downed** in co-op. A living teammate can press **E / USE** within 2.2 metres, with a clear line of sight, to revive you to 40 health with three seconds of protection. If everyone is down, the run ends. Once the lift is open, a living teammate reaching the lift car wins the run for the team.
-- Late joiners receive the current world. Full rooms, mismatched versions, failed connections and host disconnects show a clear message and a route back to the menu. The host must stay in the game; there is no host migration. Pause opens local settings while the online room continues running. Returning to the menu closes the connection and disposes teammate graphics.
+The freight lift arrives 24 seconds after all three fuses are installed. Close doors, use cover and follow the signs to escape a chase.
 
-Networking uses the bundled **PeerJS 1.5.5** client and the public PeerServer Cloud for signalling, then WebRTC data channels between browsers. No microphone or camera is requested. The game remains deployable as static files on Vercel. Restrictive networks can block peer-to-peer connections; for deployment on those networks, an operator can set `window.FACILITY_RTC_CONFIG = {iceServers: [...]}` before `facility-coop.js` loads, using their own STUN/TURN service. No relay credentials are bundled. See [PeerJS configuration](https://peerjs.com/client/api/peer). Solo play does not load the networking dependency.
+## Development and verification
 
-The entry pages and service-worker cache are versioned as `coop-survival-r1-20261021`. Multiplayer parameters are preserved through `index.html`, `game.html` and `game-core.html`. Gameplay scripts use network-first caching so an old installed copy cannot silently keep the old room code.
+Deploy the repository to Vercel to serve the game and the Node.js function in `api/facility-room.js`. Solo play also works with a local static server, for example `python -m http.server 8000` and `http://localhost:8000/`. A static server alone cannot execute the multiplayer API.
 
-Controls:
+Run `node --test tests/facility-regression.test.cjs`. Coverage includes source parsing, geometry, routes, physical door sweeps, native hospital frames/hinges, joystick and stamina behavior, uploaded creature rigs, pursuit/cover rules, health and revives, four-client hosted room packets, transient request recovery, late joins, API boundaries, extension/Backrooms reachability and native outdoor running animation.
 
-- WASD / joystick: walk. Full forward joystick never activates sprint.
-- Hold Shift or the touch SPRINT button: sprint. A mapped controller sprint button also works.
-- Sprint reserve: 30 seconds; recovery begins after 0.35 seconds, with a full refill taking about 3 seconds standing or 4.5 seconds walking.
-- E / USE: doors, fuses, batteries, breaker, revive a nearby downed teammate. F / LIGHT: flashlight. C / CROUCH: crouch.
+A real hosted-service test also connected four distinct clients, delivered shared world messages to all three guests and rejected a fifth. Browser rendering, actual touch controls and a simultaneous physical-device play session still need playtesting.
 
-Wall texture flicker is fixed at the source: wall panels sit 18 mm clear of the structural wall instead of sharing its exact depth. Door jambs meet the lintel at 2.3 m without overlapping their front surfaces. This prevents competing wall/panel textures and bright patches around the top corners of doorways as the camera moves. No global depth bias is applied to hide geometry problems.
-
-Door visuals now match their physical angles from initialization through settling. Collision checks sweep the full capsule movement, including fallback slides, against the physical leaf at every angle. Navigation assigns doors to the correct floor. Gameplay changes are integrated into `game-core.html`; the entry pages no longer depend on runtime string replacements or injected patches.
-
-Run `node --test tests/facility-regression.test.cjs` for parsing, geometry, map routes, door collision, joystick/stamina behavior, uploaded creature rig and animation checks, physical pursuit, cover/escape behavior, health cooldowns and recovery, downing and revives, multiplayer targeting, loader parameters, idempotent interactions, late-join snapshots, four-client room protocol and disconnect cleanup. Multiplayer protocol tests use separate game contexts and an in-memory data transport; they do not verify browser WebRTC/ICE, cross-network connectivity, visual layout or physical touch responsiveness. Those still need browser/device playtesting.
+The active build is `courtyard-r2-20261021`. Both entry HTML files and `game-core.html` load this build. The service worker bypasses `/api/` entirely and uses network-first caching for gameplay scripts. Attribution is in [CREDITS.md](CREDITS.md).

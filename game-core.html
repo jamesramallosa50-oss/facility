@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>The Facility — East Wing</title>
-<meta name="facility-build" content="coop-survival-r1-20261021">
+<title>The Facility — Night Courtyard</title>
+<meta name="facility-build" content="courtyard-r2-20261021">
 <meta name="theme-color" content="#060807">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="mobile-web-app-capable" content="yes">
@@ -14191,7 +14191,7 @@ function gmPics(){return {classic:'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ
    The world is a grid of 0.5 m columns. Each column holds the open (air) intervals along y; floors, ceilings and walls
    come from where air meets solid, so walls, slabs, ledges and door frames are always closed and never paper-thin.
    Stairs, railings and props are boxes on top of that grid. Everything that collides is either a grid column or a box. */
-const FCY=[8,4,0],FC=.5,FNX=140,FNZ=100,FVY=.25,FNY=52;
+const FCY=[8,4,0],FC=.5,FNX=248,FNZ=204,FVY=.25,FNY=52;
 const FK={con:1,cro:2,bsm:3,off:4,srv:5,gal:6,hal:7,swc:8,swy:9,frm:10,lift:11};
 const FKN=['','con','cro','bsm','off','srv','gal','hal','swc','swy','frm','lift'];
 function facRng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;};}
@@ -14331,6 +14331,7 @@ function facPlan(){
   W.wingSigns.push({k:2,x:43,z:4.5,nx:0,nz:1,text:'FREIGHT LIFT',sub:'VIA MAINTENANCE',arrow:'left'});
 
   facProps(W);
+  if(window.FacilityWorld)window.FacilityWorld.plan(W);
 
   /* ---------- lights (tubes on the ceiling; 'dead' ones are dark, 'dim' ones are weak) ---------- */
   for(const x of[9,15,21,27,33])L(1,x,3,'x','cyan',{dead:x===27});
@@ -14656,10 +14657,12 @@ function facGeomWorld(W,B){
   const G=W.G,SD=[[1,0],[-1,0],[0,1],[0,-1]];
   for(let j=0;j<FNZ;j++)for(let i=0;i<FNX;i++){const c=j*FNX+i,cnt=G.ic[c];if(!cnt)continue;
     const x0=i*FC,z0=j*FC,cx=x0+FC/2,cz=z0+FC/2;
+    if(window.FacilityWorld?.nativeAt(W,cx,cz))continue;
+    const outdoors=window.FacilityWorld?.outside({x:cx,y:4,z:cz});
     for(let q=0;q<cnt;q++){const a=G.iv[(c*FMI+q)*2],b=G.iv[(c*FMI+q)*2+1];
       /* floor and ceiling of this air interval */
-      {const kd=facKindAt(W,c,a+.05),m=facFloorMat(kd),t=facTintAt(FTINT.floor[kd],cx,a,cz,1);B.quad(m,[cx,a,cz],[FC/2,0,0],[0,0,FC/2],[0,1,0],facUV(m,[0,1,0]),t,1);}
-      {const kd=facKindAt(W,c,b-.05),m=facCeilMat(kd),t=facTintAt(FTINT.ceil[kd],cx,b,cz);B.quad(m,[cx,b,cz],[FC/2,0,0],[0,0,FC/2],[0,-1,0],facUV(m,[0,-1,0]),t,1);}
+      if(!outdoors){const kd=facKindAt(W,c,a+.05),m=facFloorMat(kd),t=facTintAt(FTINT.floor[kd],cx,a,cz,1);B.quad(m,[cx,a,cz],[FC/2,0,0],[0,0,FC/2],[0,1,0],facUV(m,[0,1,0]),t,1);}
+      if(!outdoors){const kd=facKindAt(W,c,b-.05),m=facCeilMat(kd),t=facTintAt(FTINT.ceil[kd],cx,b,cz);B.quad(m,[cx,b,cz],[FC/2,0,0],[0,0,FC/2],[0,-1,0],facUV(m,[0,-1,0]),t,1);}
       /* walls: the parts of this interval the neighbour column does not share */
       for(const [di,dj] of SD){const ni=i+di,nj=j+dj;let segs=[[a,b]];
         if(ni>=0&&nj>=0&&ni<FNX&&nj<FNZ){const nc=nj*FNX+ni;for(let r=0;r<G.ic[nc];r++){const na=G.iv[(nc*FMI+r)*2],nb=G.iv[(nc*FMI+r)*2+1],out=[];
@@ -14669,6 +14672,7 @@ function facGeomWorld(W,B){
           /* split at the level bands (each band has its own kind of wall) and every 0.5 m (for the baked light) */
           const cuts=[s[0]];for(let y=Math.floor(s[0]/.5+1e-6)*.5+.5;y<s[1]-.01;y+=.5)cuts.push(y);cuts.push(s[1]);
           for(let u=0;u<cuts.length-1;u++){const ya=cuts[u],yb=cuts[u+1];if(yb-ya<.005)continue;const ym=(ya+yb)/2,kd=facKindAt(W,c,ym),m=facWallMat(kd),band=facBand(ym);
+            if(outdoors&&ym>6.4)continue;
             const t=facTintAt(FTINT.wall[kd],fx,ym,fz);
             B.quad(m,[fx,ym,fz],di?[0,0,FC/2]:[FC/2,0,0],[0,(yb-ya)/2,0],n,facUV(m,n,FCY[band]),t,1);}}}
     }}
@@ -14732,6 +14736,7 @@ function facGeomRails(W,B){
 }
 const FDS={teal:[.34,.62,.66],blue:[.3,.5,.72],grey:[.46,.5,.52],green:[.4,.56,.4]};
 function facGeomFrames(W,B){
+  if(window.FacilityWorld?.doorReady())return;
   // Join jambs to the lintel at 2.3 m; do not overlap their textured faces.
   for(const d of W.doors){const y=FCY[d.k],alongZ=(d.x1-d.x0)<(d.z1-d.z0),t=(FDS[d.style]||FDS.grey).map(v=>v*.62).concat([.4]);
     if(alongZ){for(const [xf,sg] of[[d.x0,-1],[d.x1,1]]){const xa=sg<0?xf-.035:xf,xb=sg<0?xf:xf+.035;
@@ -15459,6 +15464,7 @@ function facWalkLine(F,ax,ay,az,bx,by,bz){
 }
 /* ---------- doors: heavy leaves on a hinge, swinging on a damped spring ---------- */
 function facDoorGeo(F,M,d){
+  const native=window.FacilityWorld?.door(F,d);if(native)return native;
   const w=d.w,h=2.26,t=.05,g=new T.BufferGeometry(),P=[],Nn=[],Uv=[],I=[],Hd=[];let n=0;
   const quad=(p,nrm,uv,hd)=>{for(let i=0;i<4;i++){P.push(...p[i]);Nn.push(...nrm);Uv.push(...uv[i]);Hd.push(hd?1:0);}I.push(n,n+1,n+2,n,n+2,n+3);n+=4;};
   /* the leaf runs along +x from the hinge; both faces map the whole door texture */
@@ -15544,6 +15550,7 @@ async function facBuild(prog){
   if(!window.FacilitySpider)throw new Error('Wolf spider runtime is missing');
   await window.FacilitySpider.load(p=>prog(.005+p*.01,'WAKING THE WOLF SPIDER'),hzFetch,Math.min(4,renderer.capabilities.getMaxAnisotropy()));
   await window.FacilityGhost.load(p=>prog(.015+p*.01,'WAKING YOUR GHOST'),hzFetch,Math.min(4,renderer.capabilities.getMaxAnisotropy()));
+  await window.FacilityWorld.load(p=>prog(.025+p*.035,'OPENING THE COURTYARD'),hzFetch);
   if(HZ!==H)return;
   let W;
   if(FACW){W=F.W=FACW.W;F.M=FACW.M;F.U=FACW.U;F.AT=FACW.AT;await step(.5,'BACK INSIDE');
@@ -15589,7 +15596,7 @@ async function facBuild(prog){
   F.pl.isBody=1;F.camY=F.pl.y+FAC.eye;F.fuses=0;F.held=0;F.stage='find';F.startT=0;F.lightT=0;
   facHealthInit(F);
   facAudioInit(F);
-  facDemonInit(F);facHauntInit(F);
+  facDemonInit(F);facHauntInit(F);window.FacilityWorld.init(F);
   if(F.dmShadow&&F.shadows)HZA.mesh.castShadow=true;
   for(const d of F.lift.doors)d.g.castShadow=!!F.shadows;
   try{renderer.compile(sc,cam);renderer.compile(F.hand.sc,cam);}catch(_){}
@@ -15725,7 +15732,7 @@ function facItems(F,dt){
   }
 }
 /* ---------- the creature ---------- */
-const FDM={r:.32,h:2.02,su:.56,prowl:1.8,inv:2.8,search:1.65,chase:4.6};
+const FDM={r:.32,h:2.02,su:.56,prowl:2.0,inv:3.1,search:2.1,chase:4.9};
 function facDemonInit(F){
   const dm=F.dm,W=F.W,p=W.peek;dm.isBody=2;dm.x=p.x;dm.z=p.z;dm.y=FCY[p.k];dm.face=Math.PI/2;dm.st='peek';dm.stT=0;dm.on=true;dm.g.visible=true;
   /* the stairwell door it peeks round is open */
@@ -15759,12 +15766,18 @@ function facDmHear(F){const dm=F.dm;let best=null,bd=0;
   for(const n of F.noise){if(n.heard)continue;n.heard=1;const d=Math.hypot(n.x-dm.x,(n.y-dm.y)*1.5,n.z-dm.z);let r=n.r;if(!facSee(F,dm.x,dm.y+1.6,dm.z,n.x,n.y+1,n.z,false))r*=.55;if(d<r&&r-d>bd){bd=r-d;best=n;}}
   return best;}
 /* walk the creature toward a point along its path; handles doors, ledges and stairs */
+function facDmWaypoint(F,n){
+  const d=F.nav.doorOf[n];if(d>=0){const door=F.doors[d];return[door.cx,door.y,door.cz];}
+  const p=facNP(F,n),clear={x:p[0],y:p[1],z:p[2]};
+  if(facPush(F,clear,FDM.r,FDM.h,FDM.su)<.35){p[0]=clear.x;p[2]=clear.z;}return p;
+}
 function facDmGo(F,tx,ty,tz,spd,dt){
   const dm=F.dm,N=F.nav;
+  if(dm.recover){const R=dm.recover;R.t-=dt;const dx=R.x-dm.x,dz=R.z-dm.z,l=Math.hypot(dx,dz);if(l>.05&&R.t>0){const step=Math.min(l,spd*dt);facMove(F,dm,dx/l*step,dz/l*step,FDM.r,FDM.h,FDM.su);dm.fwant=Math.atan2(dx,dz);facDmGround(F);return 'move';}dm.recover=null;dm.path=null;dm.lineT=0;}
   if(dm.leap){const L=dm.leap;L.t+=dt;const k=Math.min(1,L.t/L.dur),x=L.a[0]+(L.b[0]-L.a[0])*k,z=L.a[2]+(L.b[2]-L.a[2])*k,y=L.a[1]+(L.b[1]-L.a[1])*k+Math.sin(k*Math.PI)*(L.up?1.1:.6);
     dm.x=x;dm.y=y;dm.z=z;dm.fwant=Math.atan2(L.b[0]-L.a[0],L.b[2]-L.a[2]);if(k>=1){dm.leap=null;dm.y=L.b[1];facDmLand(F);dm.path=null;}return 'leap';}
   if(dm.bash){const B=dm.bash;B.t+=dt;dm.fwant=Math.atan2(B.d.cx-dm.x,B.d.cz-dm.z);if(B.t>=B.dur){if(!B.done){B.done=1;facDoorOpen(F,B.d,dm.x,dm.z,B.fast);if(B.fast){facNoise(F,B.d.cx,B.d.y,B.d.cz,22);F.shake=Math.max(F.shake||0,.4*clamp(1-Math.hypot(F.pl.x-dm.x,F.pl.z-dm.z)/12,0,1));}}
-      if(B.t>B.dur+.25||Math.abs(B.d.th)>.9)dm.bash=null;}return 'bash';}
+      if(Math.abs(B.d.th)>1.38)dm.bash=null;}return 'bash';}
   // A clear physical capsule path avoids zigzags between grid centres.
   dm.lineT=(dm.lineT||0)-dt;
   if(dm.lineT<=0){dm.lineT=.16;dm.direct=facHauntClear(F,{x:dm.x,y:dm.y,z:dm.z,radius:FDM.r,height:FDM.h},tx,ty,tz);}
@@ -15774,10 +15787,10 @@ function facDmGo(F,tx,ty,tz,spd,dt){
   const P=dm.path;if(!P||P.length<2){/* no route: walk straight if it is close */const dx=tx-dm.x,dz=tz-dm.z,l=Math.hypot(dx,dz),sameY=Math.abs(ty-dm.y)<1.2;if(l<.4&&sameY)return 'there';if(!sameY&&l<.4)return 'move';
     facMove(F,dm,dx/l*spd*dt,dz/l*spd*dt,FDM.r,FDM.h,FDM.su);dm.fwant=Math.atan2(dx,dz);facDmGround(F);return l<1&&sameY?'there':'move';}
   /* drop the nodes already behind */
-  while(dm.pi<P.length-1){const p=facNP(F,P[dm.pi]);if(Math.hypot(p[0]-dm.x,p[2]-dm.z)<.45&&Math.abs(p[1]-dm.y)<.7)dm.pi++;else break;}
+  while(dm.pi<P.length-1){const p=facDmWaypoint(F,P[dm.pi]);if(Math.hypot(p[0]-dm.x,p[2]-dm.z)<.28&&Math.abs(p[1]-dm.y)<.7)dm.pi++;else break;}
   /* a door on the way: open it (or smash it when hunting) */
   for(let k=dm.pi;k<Math.min(P.length,dm.pi+4);k++){const di=N.doorOf[P[k]];if(di<0)continue;const d=F.doors[di];
-    if(Math.abs(d.th)<1.05&&Math.hypot(d.cx-dm.x,d.cz-dm.z)<1.45&&!(d.opening&&Math.abs(d.tgt)>1)){const fast=dm.st==='chase'||dm.st==='inv';
+    if(Math.abs(d.th)<1.38&&Math.hypot(d.cx-dm.x,d.cz-dm.z)<1.6&&!(d.opening&&Math.abs(d.tgt)>1)){const fast=dm.st==='chase'||dm.st==='inv';
       dm.bash={d,t:0,dur:fast?(d.lock?1.8:(F.t-(d.slamT||-9)<2.5?1.8:1.25)):1.4,fast};if(d.lock&&fast)d.lock=false;if(!fast)facSndCreak(F,d,.6);return 'bash';}}
   /* a ledge to jump down or leap up */
   if(dm.pi>0||dm.pi<P.length-1){for(const L of F.links){const i=P.indexOf(L.a,dm.pi),j=P.indexOf(L.b,dm.pi);
@@ -15785,14 +15798,14 @@ function facDmGo(F,tx,ty,tz,spd,dt){
       if(j>=0&&i===j+1&&j<=dm.pi+1){const a=facNP(F,L.b),b=facNP(F,L.a);if(Math.hypot(a[0]-dm.x,a[2]-dm.z)<.9){dm.leap={a:[dm.x,dm.y,dm.z],b,t:0,dur:.9,up:true};dm.pi=i;facDmRoar(F,.5);return 'leap';}}}}
   /* look ahead along the path for the furthest point it can walk to in a straight line */
   dm.wlT-=dt;if(dm.wlT<=0||!dm.ahead){dm.wlT=.15;let best=Math.min(dm.pi,P.length-1);
-    for(let k=Math.min(P.length-1,dm.pi+10);k>dm.pi;k--){const p=facNP(F,P[k]);if(facWalkLine(F,dm.x,dm.y,dm.z,p[0],p[1],p[2])&&facHauntClear(F,{x:dm.x,y:dm.y,z:dm.z,radius:FDM.r,height:FDM.h},...p)){best=k;break;}}dm.ahead=best;}
-  const wp=facNP(F,P[Math.max(dm.ahead,dm.pi)]),dx=wp[0]-dm.x,dz=wp[2]-dm.z,l=Math.hypot(dx,dz);
+    for(let k=Math.min(P.length-1,dm.pi+10);k>dm.pi;k--){const p=facDmWaypoint(F,P[k]);if(facWalkLine(F,dm.x,dm.y,dm.z,p[0],p[1],p[2])&&facHauntClear(F,{x:dm.x,y:dm.y,z:dm.z,radius:FDM.r,height:FDM.h},...p)){best=k;break;}}dm.ahead=best;}
+  const wp=facDmWaypoint(F,P[Math.max(dm.ahead,dm.pi)]),dx=wp[0]-dm.x,dz=wp[2]-dm.z,l=Math.hypot(dx,dz);
   const last=dm.pi>=P.length-1;if(last&&l<.35)return 'there';
   const st=Math.min(l,spd*dt);if(l>1e-3){const ox=dm.x,oz=dm.z;facMove(F,dm,dx/l*st,dz/l*st,FDM.r,FDM.h,FDM.su);dm.fwant=Math.atan2(dx,dz);
     /* stuck against something: think again */
-    if(Math.hypot(dm.x-ox,dm.z-oz)<st*.2){dm.stuck=(dm.stuck||0)+dt;if(dm.stuck>.5){dm.stuck=0;dm.path=null;dm.pi=0;}}else dm.stuck=0;}
+    if(Math.hypot(dm.x-ox,dm.z-oz)<st*.2){dm.stuck=(dm.stuck||0)+dt;if(dm.stuck>.65){dm.stuck=0;dm.path=null;dm.pi=0;dm.lineT=0;for(const sign of[1,-1]){const x=dm.x-dz/Math.max(l,.001)*sign*.65,z=dm.z+dx/Math.max(l,.001)*sign*.65;if(facHauntClear(F,{x:dm.x,y:dm.y,z:dm.z,radius:FDM.r,height:FDM.h},x,dm.y,z)){dm.recover={x,z,t:.65};break;}}}}else dm.stuck=0;}
   facDmGround(F);
-  const g=facNP(F,P[P.length-1]);return Math.hypot(g[0]-dm.x,g[2]-dm.z)<.6&&Math.abs(g[1]-dm.y)<1?'there':'move';
+  const g=facDmWaypoint(F,P[P.length-1]);return Math.hypot(g[0]-dm.x,g[2]-dm.z)<.6&&Math.abs(g[1]-dm.y)<1?'there':'move';
 }
 function facDmGround(F){const dm=F.dm,g=facGround(F,dm.x,dm.z,dm.y,FDM.su);if(!Number.isFinite(g)||g< -1e8){dm.path=null;return;}if(g>dm.y-.7)dm.y+=(g-dm.y)*.6;else dm.y=Math.max(g,dm.y-.3);}
 /* a random spot within reach of (x,y,z), ideally out of your sight */
@@ -15805,6 +15818,9 @@ function facDemonTick(F,dt){
   if(![dm.x,dm.y,dm.z].every(Number.isFinite)||dm.y< -3||dm.y>16){const p=dm.lastValid||[F.W.peek.x,FCY[F.W.peek.k],F.W.peek.z];facDmPlace(F,...p);facDmState(F,'prowl');}
   else dm.lastValid=[dm.x,dm.y,dm.z];
   if(dm.g.parent!==F.scene)F.scene.add(dm.g);
+  const isOutside=window.FacilityWorld?.enemyOutside;
+  if(isOutside&&facPlayers(F).filter(facAlive).every(isOutside)&&dm.st!=='kill')facDmState(F,'guard');
+  else if(dm.st==='guard')facDmState(F,'prowl');
   const oldX=dm.x,oldZ=dm.z;dm.stT+=dt;dm.t+=dt;
   const dx=pl.x-dm.x,dz=pl.z-dm.z,dist=Math.hypot(dx,dz,(pl.y-dm.y)*1.2);F.dmDist=dm.on?dist:99;
   /* senses, ten times a second */
@@ -15817,7 +15833,7 @@ function facDemonTick(F,dt){
     case 'peek':{/* standing at the stairwell door, looking down the corridor at you */dm.fwant=Math.atan2(dx,dz);
       const seen=facOnScreen(F,dm.x,dm.y+1.4,dm.z)&&dist<17&&facSee(F,pl.x,F.camY,pl.z,dm.x,dm.y+1.5,dm.z,false);if(seen){dm.seenT=(dm.seenT||0)+dt;if(!D.seenOnce&&dm.seenT>.12){D.seenOnce=1;facSting(F,1);}}
       if((dm.seenT||0)>.75||(dist<4.5&&pl.z<4.6)||dm.stT>18){facDmState(F,'withdraw');}break;}
-    case 'withdraw':{spd=2.6;res=facDmGo(F,4,FCY[1],6.5,spd,dt);if(res==='there'||dm.stT>4){dm.on=false;dm.g.visible=false;facDmState(F,'away');D.awayT=12+Math.random()*6;}break;}
+    case 'withdraw':{spd=2.6;res=facDmGo(F,4,FCY[1],6.5,spd,dt);if(res==='there'||dm.stT>4){facDmState(F,'prowl');}break;}
     case 'away':break;
     case 'prowl':{spd=FDM.prowl*(D.final?1.6:1);
       if(dm.waitT>0){/* stops, listens, sniffs the air */dm.waitT-=dt;spd=0;if(Math.random()<dt*.5)facDmSniff(F);}
@@ -15828,7 +15844,7 @@ function facDemonTick(F,dt){
     case 'search':{spd=FDM.search;if(!dm.sp||dm.spT<=0||dm.spT==null){const m=dm.mem||{x:dm.x,y:dm.y,z:dm.z};dm.sp=facDmSpot(F,m.x,m.y,m.z,1.5,8,false,30)||[m.x,m.y,m.z];dm.spT=6;dm.looks=(dm.looks||0)+1;}
       dm.spT-=dt;res=facDmGo(F,dm.sp[0],dm.sp[1],dm.sp[2],spd,dt);if(res==='there'){spd=0;if(dm.lookB==null)dm.lookB=dm.face;dm.fwant=dm.lookB+Math.sin(dm.stT*1.3)*1.1;if(dm.spT>2)dm.spT=2;}else dm.lookB=null;
       if(dm.stT>18||dm.looks>4){dm.looks=0;facDmState(F,'prowl');D.calm=0;}break;}
-    case 'chase':{spd=chaseSpd*(dm.stT<.8?.7:dm.stT>18?.88:1);const seenAgo=F.t-(dm.lastVisual==null?-99:dm.lastVisual);
+    case 'chase':{spd=chaseSpd*(dm.stT<.8?.8:1);const seenAgo=F.t-(dm.lastVisual==null?-99:dm.lastVisual);
       const m=dm.mem;if(!m){facDmState(F,'prowl');break;}res=facDmGo(F,m.x,m.y,m.z,spd,dt);
       if(seenAgo>(D.final?4:3.2)){facDmState(F,'search');}
       if(res==='there'&&seenAgo>1.2){facDmState(F,'search');}
@@ -15838,16 +15854,17 @@ function facDemonTick(F,dt){
     case 'door':{/* waiting behind a door you are about to open */const d=dm.amb.d;dm.fwant=Math.atan2(d.cx-dm.x,d.cz-dm.z);
       if(Math.abs(d.th)>.3){facDmReveal(F,1.25);facSting(F,1.2);}
       else if(Math.hypot(pl.x-d.cx,pl.z-d.cz)<2.1&&facDoorSide(d,pl.x,pl.z)!==facDoorSide(d,dm.x,dm.z)){dm.ambT=(dm.ambT||0)+dt;if(dm.ambT>1.4){facDoorOpen(F,d,dm.x,dm.z,true);facDmReveal(F,1.25);facSting(F,1.2);F.shake=.5;}}
-      if(dm.stT>30){dm.on=false;dm.g.visible=false;facDmState(F,'away');D.awayT=8;}break;}
+      if(dm.stT>30){facDmState(F,'prowl');}break;}
     case 'vent':{/* in the ceiling above a vent: you hear it, then it drops */const v=dm.amb.v;dm.y=v.y+.4;dm.vis=false;
       dm.scrT=(dm.scrT||0)-dt;const dv=Math.hypot(pl.x-v.x,pl.z-v.z);if(dm.scrT<=0&&dv<14){dm.scrT=1.2+Math.random()*1.4;facDmScrape(F,v,clamp(1-dv/14,.2,1));}
       if(dv<4.2&&Math.abs(pl.y-FCY[v.k])<1.5){/* it drops */v.fall=1;v.vy=0;facDmPlace(F,v.x,v.y-.2,v.z,Math.atan2(pl.x-v.x,pl.z-v.z));dm.drop={vy:0};facDmState(F,'drop');facSting(F,1.2);facSndGrate(F,v);}
-      if(dm.stT>35){dm.on=false;dm.g.visible=false;facDmState(F,'away');D.awayT=6;}break;}
+      if(dm.stT>35){facDmPlace(F,v.x,FCY[v.k],v.z);facDmState(F,'prowl');}break;}
     case 'drop':{dm.drop.vy-=16*dt;dm.y+=dm.drop.vy*dt;const g=facGround(F,dm.x,dm.z,dm.y+.05,.1);dm.fwant=Math.atan2(dx,dz);if(dm.y<=g){dm.y=g;facDmLand(F);facDmReveal(F,1.25);}break;}
     case 'cross':{spd=4.8;const B=dm.cross;res=facDmGo(F,B[0],B[1],B[2],spd,dt);
       if(!dm.crossSeen&&dm.vis){dm.crossSeen=1;facSting(F,.8);}
       if(dm.sees>0&&!dm.crossSaw){dm.crossSaw=1;if(dist<9&&Math.random()<.2){facDmReveal(F,1.25);break;}}
-      if(res==='there'||dm.stT>4.5){dm.on=false;dm.g.visible=false;facDmState(F,'away');D.awayT=8+Math.random()*7;}break;}
+      if(res==='there'||dm.stT>4.5){facDmState(F,'prowl');}break;}
+    case 'guard':{spd=1.8;facDmGo(F,36,4,43,spd,dt);break;}
     case 'kill':break;
   }
   if(dm.st==='prowl'||dm.st==='inv'||dm.st==='search'){
@@ -15895,23 +15912,12 @@ function facOnScreen(F,x,y,z){const v=F.tmpV||(F.tmpV=new T.Vector3());v.set(x,y
 /* ---------- the director: when it rests, when it stalks, when it ambushes you ---------- */
 function facDirector(F,dt){
   const D=F.dir,dm=F.dm,pl=F.coop?facHuntTarget(F):F.pl;D.t+=dt;
+  // The hunter stays in the building. Its mesh only hides behind real cover;
+  // no random away timers or teleport ambushes interrupt a pursuit.
+  if(!dm.on&&dm.st!=='kill'){dm.on=true;dm.g.visible=true;facDmState(F,'prowl');}
   if(F.t<(D.graceUntil||0)||F.t<(D.recoverUntil||0))return;
-  /* a fuse was taken: it knows roughly where you are */
-  if(D.alertAt>0&&F.t>=D.alertAt){D.alertAt=-1;if(dm.st==='away'){const p=facDmSpot(F,pl.x,pl.y,pl.z,16,28,true,60);if(p){facDmPlace(F,p[0],p[1],p[2]);dm.mem={x:pl.x,y:pl.y,z:pl.z,t:F.t};facDmState(F,'inv');}}
-    else if(dm.st!=='chase'&&dm.st!=='reveal'){dm.mem={x:pl.x+(Math.random()-.5)*4,y:pl.y,z:pl.z+(Math.random()-.5)*4,t:F.t};facDmState(F,'inv');}facDmRoar(F,.6);}
-  if(dm.st==='away'){D.awayT-=dt;if(D.awayT<=0){
-      /* back on the hunt: an ambush if there is a good one, otherwise it starts prowling somewhere out of sight */
-      if(!facAmbush(F)){const p=facDmSpot(F,pl.x,pl.y,pl.z,18,30,true,60);if(p){facDmPlace(F,p[0],p[1],p[2]);facDmState(F,'prowl');}else D.awayT=2;}}}
-  /* long quiet stretches end in an ambush */
-  const quiet=F.t-Math.max(D.lastSeen,D.lastChase);
-  if((dm.st==='prowl'||dm.st==='search')&&quiet>D.ambT&&!facOnScreen(F,dm.x,dm.y+1.2,dm.z)){if(facAmbush(F))D.ambT=55+Math.random()*25;else D.ambT+=6;}
-  /* after a chase you got away from, it may leave for a while: silence */
-  if(dm.st==='prowl'&&dm.stT>25&&quiet>40&&Math.random()<dt*.04&&!D.final&&!facOnScreen(F,dm.x,dm.y+1.2,dm.z)){dm.on=false;dm.g.visible=false;facDmState(F,'away');D.awayT=22+Math.random()*13;}
-  /* The final alarm draws it to the breaker, never to a hidden player's exact position. */
-  if(D.final){D.fT=(D.fT||0)-dt;if(D.fT<=0){D.fT=10;const B=F.W.breaker;
-    if(dm.st==='away'){const p=facDmSpot(F,pl.x,pl.y,pl.z,20,30,true,60);if(p){facDmPlace(F,p[0],p[1],p[2]);dm.mem={x:B.x,y:FCY[B.k],z:B.z,t:F.t};facDmState(F,'inv');}}
-    else if(dm.st==='prowl'||dm.st==='search'||dm.st==='inv'){dm.mem={x:B.x,y:FCY[B.k],z:B.z,t:F.t};facDmState(F,'inv');}
-  }}
+  if(D.alertAt>0&&F.t>=D.alertAt){D.alertAt=-1;if(!['chase','reveal','guard'].includes(dm.st)){const sound=F.noise[F.noise.length-1];dm.mem={x:sound?.x??pl.x,y:sound?.y??pl.y,z:sound?.z??pl.z,t:F.t};facDmState(F,'inv');}}
+  if(D.final){D.fT=(D.fT||0)-dt;if(D.fT<=0){D.fT=10;const B=F.W.breaker;if(['prowl','search','inv'].includes(dm.st)){dm.mem={x:B.x,y:FCY[B.k],z:B.z,t:F.t};facDmState(F,'inv');}}}
 }
 /* set up a scare that the place itself explains: behind a door ahead, in a vent above, round a corner, on the floor above or below */
 function facAmbush(F){
@@ -16091,7 +16097,7 @@ function facCam(F,dt){
     for(const o of F.vOpen){const ddx=Math.max(o.x0-cx,0,cx-o.x1),ddz=Math.max(o.z0-cz,0,cz-o.z1),d=Math.hypot(ddx,ddz);if(d>10)continue;if(o.b0===pb||o.b1===pb){vb[o.b0]=vb[o.b1]=true;}if(d<.6)for(let b=Math.min(o.b0,o.b1);b<=Math.max(o.b0,o.b1);b++)vb[b]=true;}
     if(F.dm.on&&F.dm.vis)vb[facBand(F.dm.y+.5)]=true;F.vb=vb;
     for(const m of F.meshes){const s=m.geometry.boundingSphere;m.visible=vb[m.userData.band]&&Math.hypot(s.center.x-cx,(s.center.y-cy_)*1.2,s.center.z-cz)-s.radius<34;}
-    for(const d of F.doors)d.mesh.visible=vb[facBand(d.y+.5)]&&Math.hypot(d.cx-cx,d.y+1-cy_,d.cz-cz)<30;
+    for(const d of F.doors){d.mesh.visible=vb[facBand(d.y+.5)]&&Math.hypot(d.cx-cx,d.y+1-cy_,d.cz-cz)<30;if(d.fixedFrame)d.fixedFrame.visible=d.mesh.visible;}
     for(const v of F.vents){const on=vb[v.k]&&Math.hypot(v.x-cx,v.z-cz)<26;v.gr.visible=on||v.fall;if(v.hole)v.hole.visible=on;}
     /* the creature is only drawn when you could see it */
     const dm=F.dm;let v=dm.on&&dm.st!=='vent'&&dm.st!=='away';if(v){const dd=Math.hypot(dm.x-cx,dm.y+1.2-cy_,dm.z-cz);if(dd>34)v=false;else if(dd>2.6){const fr=F.frus||(F.frus=new T.Frustum()),m4=F.m4||(F.m4=new T.Matrix4());m4.multiplyMatrices(cam.projectionMatrix,cam.matrixWorldInverse);fr.setFromProjectionMatrix(m4);
@@ -16123,7 +16129,7 @@ function facHud(F){
     if(hint!==F.hintTx){F.hintTx=hint;F.hintT=F.t;}set('hzbest',hint);const e=$('hzbest');if(e){const o=F.t-F.hintT<14?'1':'0';if(e.style.opacity!==o){e.style.transition='opacity 1.6s';e.style.opacity=o;}}}
   const st=$('hzsta');if(st){const on=pl.sta<.995||F.running;if(st.classList.contains('on')!==on)st.classList.toggle('on',on);if(st.classList.contains('tired')!==pl.tired)st.classList.toggle('tired',pl.tired);const w=Math.round(pl.sta*100)+'%';if(st.firstChild.style.width!==w)st.firstChild.style.width=w;}
   const room=F.W.rooms.find(r=>r.k===facBand(pl.y+.1)&&pl.x>=r.x0&&pl.x<=r.x1&&pl.z>=r.z0&&pl.z<=r.z1);
-  const sector=pl.x>46?'EAST WING':'WEST WING';
+  const sector=window.FacilityWorld?.outside(pl)?'OUTSIDE':pl.x>72?'BACKROOMS':pl.x>46?'EAST WING':'WEST WING';
   set('hzkeys',(pl.light?'LIGHT ':'LIGHT OFF · ')+Math.round(pl.bat*100)+'% · '+sector+(room?' / '+room.nm:''));
   const a=F.aim,c=$('fcross');if(c&&c.classList.contains('on')!==!!a)c.classList.toggle('on',!!a);
   if(F.t>(F.tipUntil||0)){let t='';if(a){const k=isTouch?'USE · ':'E · ';if(a.t==='door')t=k+(a.d.lock?'LOCKED':Math.abs(a.d.th)<.6&&Math.abs(a.d.tgt)<.6?'OPEN':'CLOSE');else if(a.t==='fuse')t=k+'TAKE THE FUSE';else if(a.t==='bat')t=k+'TAKE THE BATTERY';else if(a.t==='brk')t=F.held>0?k+'PUT IN A FUSE':'BREAKER '+F.brk.n+' / 3';}
@@ -16146,7 +16152,7 @@ function facHauntInit(F){
     F.scene.add(sign);F.haunt.signs.push(sign);F.haunt.signMats.push(...sign.userData.materials);F.haunt.signTex.push(...sign.userData.textures);
   }
 }
-function facHauntFree(F){return F.haunt&&!F.haunt.active&&F.t>=F.haunt.next&&F.t>=(F.dir?.recoverUntil||0)&&F.t-(F.dir?.lastChase||-99)>12&&F.stage==='find'&&F.dm.st!=='chase'&&F.dm.st!=='reveal'&&(!F.dm.on||F.dm.st==='away'||Math.hypot(F.dm.x-F.pl.x,F.dm.y-F.pl.y,F.dm.z-F.pl.z)>8);}
+function facHauntFree(F){if(window.FacilityWorld?.enemyOutside(F.pl))return false;return F.haunt&&!F.haunt.active&&F.t>=F.haunt.next&&F.t>=(F.dir?.recoverUntil||0)&&F.t-(F.dir?.lastChase||-99)>12&&F.stage==='find'&&F.dm.st!=='chase'&&F.dm.st!=='reveal'&&(!F.dm.on||F.dm.st==='away'||Math.hypot(F.dm.x-F.pl.x,F.dm.y-F.pl.y,F.dm.z-F.pl.z)>8);}
 function facHauntSpawn(F,kind,p,mode,door){
   const S=F.haunt,a=S.actors.find(a=>a.kind===kind);if(!a||S.active)return false;
   if(!p.every(Number.isFinite))return false;
@@ -16191,7 +16197,7 @@ function facHauntWalk(F,a,tx,ty,tz,speed,dt){
   let p;
   if(a.direct)p=[tx,ty,tz];
   else{
-    if(a.repath<=0||!a.path){a.repath=.45;const start=facNodeNear(F,a.x,a.y,a.z),goal=facNodeNear(F,tx,ty,tz);a.path=facPath(F,start,goal,8000,true);a.pi=1;}
+    if(a.repath<=0||!a.path){a.repath=.45;const start=facNodeNear(F,a.x,a.y,a.z),goal=facNodeNear(F,tx,ty,tz);a.path=facPath(F,start,goal,30000,true);a.pi=1;}
     if(!a.path)return;
     // Skip reached nodes within the same frame. Returning at every node used
     // to interrupt the gait and throw away a large part of the chase speed.
@@ -16337,6 +16343,7 @@ function facTick(dt){
   if(H.dead){facDeadTick(F,dt);facAudio(F,dt);return;}
   if(H.won){facWinTick(F,dt);facCam(F,dt);return;}
   if(!H.paused)facPlayer(F,dt);else{F.pl.vx=F.pl.vz=0;F.running=false;}
+  window.FacilityWorld?.tick(F,dt,facAuthority(F));
   if(facAuthority(F)){facDoorsTick(F,dt);facDemonTick(F,dt);if(H.dead)return;facDirector(F,dt);facItems(F,dt);facHauntTick(F,dt);facHealthTick(F,dt);}
   for(const v of F.vents)if(v.fall){v.vy-=14*dt;v.gr.position.y+=v.vy*dt;v.gr.rotation.x+=dt*3;const g=facGround(F,v.x,v.z,v.gr.position.y+.3,.4);if(v.gr.position.y<g+.02){v.gr.position.y=g+.02;v.gr.rotation.x=0;v.fall=0;}}
   facCam(F,dt);facAudio(F,dt);facHud(F);
@@ -16390,12 +16397,13 @@ function facWinTick(F,dt){
 /* ---------- leaving: give back everything the mode borrowed ---------- */
 function facDispose(H,keep){
   const F=H.fac;if(!F)return;
+  window.FacilityWorld?.dispose(F);
   facCoopDispose(F);document.getElementById('fhealth')?.remove();
   try{facAudioStop(F);facHauntDispose(F);}catch(_){}
   try{if(HZA){if(F.dmat0)HZA.mesh.material=F.dmat0;if(HZA.root.parent)HZA.root.parent.remove(HZA.root);}if(F.dm&&F.dm.mix)F.dm.mix.stopAllAction();if(F.dmat)F.dmat.dispose();}catch(_){}
   /* what belongs to this run only: doors, pickups, the hand, the lift doors */
   const kept=new Set();if(keep&&FACW){for(const o of FACW.geos)kept.add(o.g);for(const o of[FACW.shafts,FACW.dust,FACW.beam,FACW.halo])if(o)kept.add(o.geometry);}
-  try{const seen=new Set();const dis=o=>{if(o.geometry&&!seen.has(o.geometry)&&!kept.has(o.geometry)){seen.add(o.geometry);o.geometry.dispose();}};if(F.scene)F.scene.traverse(dis);if(F.hand)F.hand.sc.traverse(dis);}catch(_){}
+  try{const seen=new Set();const dis=o=>{if(o.geometry&&!o.geometry.userData.facShared&&!seen.has(o.geometry)&&!kept.has(o.geometry)){seen.add(o.geometry);o.geometry.dispose();}};if(F.scene)F.scene.traverse(dis);if(F.hand)F.hand.sc.traverse(dis);}catch(_){}
   try{if(F.hand)for(const m of F.hand.mats)m.dispose();if(F.glowMat){F.glowMat.map.dispose();F.glowMat.dispose();}if(F.handleMat)F.handleMat.dispose();for(const m of F.liftMats||[])m.dispose();if(F.ventMat)F.ventMat.dispose();}catch(_){}
   if(!keep){try{for(const k in F.M){const m=F.M[k];for(const t of m.userData.tex||[])t.dispose();m.dispose();}for(const o of[F.shafts,F.dust,F.beam,F.halo])if(o)o.material.dispose();if(F.post)F.post.dispose();}catch(_){}FACW=null;}
   try{renderer.setRenderTarget(null);$('view').classList.remove('hzfac');if(F.spot){F.spot.castShadow=false;if(F.spot.shadow.map){F.spot.shadow.map.dispose();F.spot.shadow.map=null;}}renderer.shadowMap.enabled=!!F.shadow0;if(F.U){F.U.uShM.value=null;F.U.uShOn.value=0;}if(HZA)HZA.mesh.castShadow=false;}catch(_){}
@@ -20086,12 +20094,14 @@ fixBar();buildTitleLevel();resize();requestAnimationFrame(frame);
   document.getElementById('ro-skip').addEventListener('click',dismiss);
 })();
 </script>
-<script src="assets/horror/spider.js?v=coop-survival-r1-20261021"></script>
-<script src="assets/horror/ghost.js?v=coop-survival-r1-20261021"></script>
-<script src="assets/horror/signs.js?v=coop-survival-r1-20261021"></script>
-<link rel="stylesheet" href="assets/facility-survival.css?v=coop-survival-r1">
-<script src="assets/facility-survival.js?v=coop-survival-r1"></script>
-<script src="assets/facility-coop.js?v=coop-survival-r1"></script>
+<script src="assets/horror/spider.js?v=courtyard-r2-20261021"></script>
+<script src="assets/horror/ghost.js?v=courtyard-r2-20261021"></script>
+<script src="assets/horror/signs.js?v=courtyard-r2-20261021"></script>
+<link rel="stylesheet" href="assets/facility-survival.css?v=courtyard-r2">
+<script src="assets/facility-survival.js?v=courtyard-r2"></script>
+<script src="assets/facility-world.js?v=courtyard-r2"></script>
+<script src="assets/facility-relay.js?v=courtyard-r2"></script>
+<script src="assets/facility-coop.js?v=courtyard-r2"></script>
 <script id="facility-direct-entry">
 (function(){
   let tries=0,done=false;

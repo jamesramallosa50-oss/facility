@@ -7,7 +7,7 @@ function facPlayers(F){return F.coop?[F.pl,...F.coop.players.values()]:[F.pl];}
 function facAuthority(F){return !F.coop||F.coop.host;}
 function facAlive(p){return !p.downed&&(p.hp==null||p.hp>0)&&!p.loading&&!p.offline;}
 function facHuntTarget(F,actor=F.dm,spider=false){
-  const list=facPlayers(F).filter(facAlive);if(!list.length)return F.pl;
+  const list=facPlayers(F).filter(p=>facAlive(p)&&(!globalThis.FacilityWorld||!globalThis.FacilityWorld.enemyOutside(p)));if(!list.length)return F.pl;
   let best=null,score=Infinity;
   for(const p of list){
     const d=Math.hypot(p.x-actor.x,(p.y-actor.y)*2,p.z-actor.z);
@@ -36,7 +36,7 @@ function facDamage(F,p,amount){
 }
 function facHealthTick(F,dt){
   if(!facAuthority(F))return;
-  const danger=F.dm.st==='chase'||F.dm.st==='reveal'||!!F.haunt?.active?.aware;
+  const danger=F.dm.st==='chase'||F.dm.st==='reveal'||F.runner?.mode==='chase'||!!F.haunt?.active?.aware;
   for(const p of facPlayers(F))if(facAlive(p)&&!danger&&F.t-(p.lastHit??-99)>FHEALTH.regenDelay)p.hp=Math.min(100,(p.hp??100)+dt*FHEALTH.regen);
   if(F.coop&&!F.coop.outcome&&facPlayers(F).filter(p=>!p.loading&&!p.offline).every(p=>p.downed))F.coop.outcome='lost';
 }
