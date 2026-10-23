@@ -15,6 +15,9 @@ function parseSpider(T,file,loaderFile){
   const data=Buffer.concat([header,js,bh,bin]);
   const ctx={THREE:T,console,TextDecoder,TextEncoder,ArrayBuffer,Uint8Array,Float32Array,Int8Array,Int16Array,Uint16Array,Uint32Array,Blob,URL,setTimeout,clearTimeout,performance,atob,btoa};ctx.window=ctx;ctx.self=ctx;
   vm.createContext(ctx);vm.runInContext(fs.readFileSync(loaderFile,'utf8'),ctx);
-  return new Promise((resolve,reject)=>new T.GLTFLoader().parse(data.buffer.slice(data.byteOffset,data.byteOffset+data.byteLength),'',resolve,reject));
+  return Promise.resolve(ctx.MeshoptDecoder?.ready).then(()=>new Promise((resolve,reject)=>{
+    const loader=new T.GLTFLoader();if(ctx.MeshoptDecoder)loader.setMeshoptDecoder(ctx.MeshoptDecoder);
+    loader.parse(data.buffer.slice(data.byteOffset,data.byteOffset+data.byteLength),'',resolve,reject);
+  }));
 }
 module.exports={parseSpider};

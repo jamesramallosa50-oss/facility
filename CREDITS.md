@@ -33,3 +33,10 @@ PeerJS 1.5.5, copyright PeerJS contributors, MIT License. The pinned browser bun
 - **office is old abandoned FREE** — dasy444 (https://sketchfab.com/dasy444). License: CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). [Source](https://sketchfab.com/3d-models/office-is-old-abandoned-free-3977a108b2304b85a698f3dda1777015). Runtime file: `assets/world/office.glb`.
 
 Modifications: textures resized to 512px; opaque textures encoded as JPEG. Original meshes and materials retained. The hospital frame and leaf are placed separately on the game hinge; the Backrooms has an entrance cut for the connecting road. The outdoor runner keeps its original skin and animation with horizontal root motion cancelled at runtime. The store runtime excludes distant stray scene objects.
+
+
+## Facility hunter runtime derivative
+
+`assets/horror/demon-runtime.glb` is an optimized derivative of the repository's existing `demon.glb`. Its native skeleton, named nodes and running animation are retained. Geometry was simplified offline from 858,335 to 25,748 triangles, and its texture was resized to 1024px and encoded as JPEG. The original source asset remains unchanged.
+
+The preparation script uses **gltfpack 1.3**, part of **meshoptimizer**, by **Arseny Kapoulkine** and contributors, under the MIT license: https://github.com/zeux/meshoptimizer/tree/v1.3. The tool is used during development and is not downloaded or executed by players.

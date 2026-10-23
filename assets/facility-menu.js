@@ -1,6 +1,6 @@
 /* Menu entry points preserve the room parameters through both game loaders. */
 function launchFacility(mode,room){
-  const q=new URLSearchParams({v:'performance-r3-20261021'});
+  const q=new URLSearchParams({v:'proximity-r4-20261022'});
   if(mode){q.set('coop',mode);q.set('room',room);q.set('name',document.getElementById('survivor-name').value.trim().slice(0,18)||'Survivor');}
   document.getElementById('coop-menu').close();
   const menu=document.getElementById('menu'),frame=document.getElementById('game');menu.style.display='none';frame.style.display='block';frame.src='game.html?'+q;frame.focus();

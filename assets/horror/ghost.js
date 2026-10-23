@@ -15,9 +15,10 @@
     });return box;
   }
   function centerRig(a){
-    let top=a.visual;while(top.parent)top=top.parent;top.updateMatrixWorld(true);
-    if(a.anchor){const p=a.anchor.getWorldPosition(a.tmp);a.offset.worldToLocal(p);a.offset.position.x=-p.x;a.offset.position.z=-p.z;}
-    top.updateMatrixWorld(true);
+    // Update this rig and its ancestors, never every mesh in the Facility.
+    a.visual.updateWorldMatrix(true,true);
+    if(a.anchor){const inverse=a.inverse||(a.inverse=new T.Matrix4());inverse.copy(a.offset.matrixWorld).invert();
+      const p=a.tmp.setFromMatrixPosition(a.anchor.matrixWorld).applyMatrix4(inverse);a.offset.position.x=-p.x;a.offset.position.z=-p.z;a.offset.updateWorldMatrix(false,true);}
   }
   function prepare(gl,anisotropy){
     if(!gl||!gl.scene)throw new Error('Ghost model has no scene');

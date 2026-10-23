@@ -23,9 +23,10 @@
   function alignFeet(actor){
     if(!asset||!asset.feet.length)return;
     actor.visual.updateWorldMatrix(true,true);let lowest=Infinity;
-    for(const foot of asset.feet){foot.getWorldPosition(asset.tmp);actor.visual.worldToLocal(asset.tmp);lowest=Math.min(lowest,asset.tmp.y);}
+    const inverse=actor.footInverse||(actor.footInverse=new T.Matrix4());inverse.copy(actor.visual.matrixWorld).invert();
+    for(const foot of asset.feet){asset.tmp.setFromMatrixPosition(foot.matrixWorld).applyMatrix4(inverse);lowest=Math.min(lowest,asset.tmp.y);}
     if(Number.isFinite(lowest))asset.visual.position.y+=asset.sole-lowest;
-    actor.visual.updateMatrixWorld(true);
+    asset.visual.updateWorldMatrix(false,true);
   }
   function prepare(gl,anisotropy){
     if(!gl||!gl.scene)throw new Error('Spider model has no scene');

@@ -17,6 +17,12 @@ The six new models total about **12.8 MB**, down from about **97.5 MB** of sourc
 
 ## Mobile performance
 
+The proximity update replaces the main hunter's runtime mesh with an offline optimized derivative of the same character: **25,748 triangles / 22,876 vertices**, down from **858,335 triangles / 484,140 vertices**. That removes about **97% of triangles** and **95% of skinned vertices** whenever the enemy is visible, including close encounters. The native 24-bone skin and 23-track running clip are retained. The texture is 1024px with bounded anisotropy; the runtime GLB is **1.38 MB** instead of **17.18 MB**. The full-detail source remains in the repository.
+
+Ghost root-motion correction now updates only its rig and ancestors, rather than walking the entire Facility scene twice per animation tick. Spider foot alignment and outdoor root correction reuse one inverse matrix per rig update. Creature movement, collision, attack timing and damage rules keep their existing values.
+
+To rebuild the hunter, use `python tools/optimize-demon.py --gltfpack /path/to/gltfpack` with [gltfpack 1.3](https://github.com/zeux/meshoptimizer/tree/v1.3) and Pillow. Simplification runs during asset preparation, never in the game. Tests load the original and optimized skins with the bundled loader, compare joint transforms across five animation times, enforce the runtime geometry budget, and check that ghost animation does not visit unrelated scenery.
+
 Auto graphics on touch devices starts at 480 render lines, adapts down to 360 under load, and skips the four-sample offscreen buffer and flashlight shadow pass. Explicit High/Ultra settings can still enable shadows. Uploaded scenery and hospital doors use vertex-lit textured materials on phones; the courtyard uses one nearby dynamic lamp rather than three. Desktop lighting remains available.
 
 Static scenery merges by material and 12-metre area. Native hospital frames and moving leaves share instanced draw batches; their original geometry, hinge transforms and collisions remain intact. Batches contain only nearby, visible door instances, while shadow-enabled views retain their shadow casters. Distant scenery is checked at a fixed cadence.
@@ -54,8 +60,8 @@ The freight lift arrives 24 seconds after all three fuses are installed. Close d
 
 Deploy the repository to Vercel to serve the game and the Node.js function in `api/facility-room.js`. Solo play also works with a local static server, for example `python -m http.server 8000` and `http://localhost:8000/`. A static server alone cannot execute the multiplayer API.
 
-Run `node --test tests/facility-regression.test.cjs` (56 checks). Coverage includes source parsing, geometry, routes, physical door sweeps, native hospital frames/hinges, joystick and stamina behavior, uploaded creature rigs, pursuit/cover rules, health and revives, four-client hosted room packets, transient request recovery, late joins, API boundaries, extension/Backrooms reachability and native outdoor running animation, instanced door transforms/view culling, mobile render buffers/materials, static batching, AI cadence/sleeping, compact packets, empty-room snapshots and model-cache migration.
+Run `node --test tests/facility-regression.test.cjs` (58 checks). Coverage includes source parsing, geometry, routes, physical door sweeps, native hospital frames/hinges, joystick and stamina behavior, uploaded creature rigs, pursuit/cover rules, health and revives, four-client hosted room packets, transient request recovery, late joins, API boundaries, extension/Backrooms reachability and native outdoor running animation, instanced door transforms/view culling, mobile render buffers/materials, static batching, AI cadence/sleeping, compact packets, empty-room snapshots and model-cache migration.
 
 A real hosted-service test also connected four distinct clients, delivered shared world messages to all three guests and rejected a fifth. Browser rendering, actual touch controls and a simultaneous physical-device play session still need playtesting.
 
-The active build is `performance-r3-20261021`. Both entry HTML files and `game-core.html` load this build. The service worker bypasses `/api/` entirely and uses network-first caching for gameplay scripts. Attribution is in [CREDITS.md](CREDITS.md).
+The active build is `proximity-r4-20261022`. Both entry HTML files and `game-core.html` load this build. The service worker bypasses `/api/` entirely and uses network-first caching for gameplay scripts. Attribution is in [CREDITS.md](CREDITS.md).

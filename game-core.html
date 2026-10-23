@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>The Facility — Night Courtyard</title>
-<meta name="facility-build" content="performance-r3-20261021">
+<meta name="facility-build" content="proximity-r4-20261022">
 <meta name="theme-color" content="#060807">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="mobile-web-app-capable" content="yes">
@@ -13201,8 +13201,8 @@ function meadowTick(dt){
 
 /* ===== BUILD 3.8: GAME MODES + HORROR: an endless dungeon, traps, and a demon that never stops running ===== */
 /* The dungeon is built a few pieces ahead of you as you run and deleted behind you. The demon follows the exact path you took.
-   The demon model is loaded at full detail (every polygon, the full 2048 px texture) only when Horror starts, so the main game
-   does not get any heavier. */
+   The hunter uses an offline simplified version of the same rigged model, loaded only when Horror starts.
+   The original high-detail source remains in the repository; no reduction work runs during play. */
 let HZ=null,HZA=null;
 const HZS=4,HZH=4.2;
 /* ---------- loading ---------- */
@@ -13218,14 +13218,14 @@ async function hzFetch(url,prog){
 async function hzLoadDemon(prog){
   if(HZA)return HZA;
   await hzScript('assets/horror/gltf.js');
-  const buf=await hzFetch('assets/horror/demon.glb',prog);
+  const buf=await hzFetch('assets/horror/demon-runtime.glb?v=proximity-r4',prog);
   await MeshoptDecoder.ready;
   const gl=await new Promise((ok,no)=>{const ld=new THREE.GLTFLoader();ld.setMeshoptDecoder(MeshoptDecoder);ld.parse(buf,'',ok,no);});
   const root=gl.scene;let skinned=null;
   root.traverse(o=>{if(o.isSkinnedMesh||o.isMesh){skinned=skinned||o;o.frustumCulled=false;}});
-  /* the texture at full size, sharp up close and smooth (mipmapped, anisotropic) at a distance, so it never shimmers */
+  /* The 1024px texture is mipmapped, with a bounded sampling cost on phones. */
   const src=skinned.material,map=src.map;
-  if(map){map.encoding=T.LinearEncoding;map.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());map.minFilter=T.LinearMipmapLinearFilter;map.magFilter=T.LinearFilter;map.generateMipmaps=true;map.needsUpdate=true;}
+  if(map){map.encoding=T.LinearEncoding;map.anisotropy=Math.min(isTouch?2:4,renderer.capabilities.getMaxAnisotropy());map.minFilter=T.LinearMipmapLinearFilter;map.magFilter=T.LinearFilter;map.generateMipmaps=true;map.needsUpdate=true;}
   const mat=new T.MeshLambertMaterial({map,skinning:true,side:T.DoubleSide,emissive:0x1a0806,emissiveMap:map});
   skinned.material=mat;try{src.dispose();}catch(_){}
   const run=gl.animations[0];
@@ -20097,14 +20097,14 @@ fixBar();buildTitleLevel();resize();requestAnimationFrame(frame);
   document.getElementById('ro-skip').addEventListener('click',dismiss);
 })();
 </script>
-<script src="assets/horror/spider.js?v=performance-r3-20261021"></script>
-<script src="assets/horror/ghost.js?v=performance-r3-20261021"></script>
-<script src="assets/horror/signs.js?v=performance-r3-20261021"></script>
-<link rel="stylesheet" href="assets/facility-survival.css?v=performance-r3">
-<script src="assets/facility-survival.js?v=performance-r3"></script>
-<script src="assets/facility-world.js?v=performance-r3"></script>
-<script src="assets/facility-relay.js?v=performance-r3"></script>
-<script src="assets/facility-coop.js?v=performance-r3"></script>
+<script src="assets/horror/spider.js?v=proximity-r4-20261022"></script>
+<script src="assets/horror/ghost.js?v=proximity-r4-20261022"></script>
+<script src="assets/horror/signs.js?v=proximity-r4-20261022"></script>
+<link rel="stylesheet" href="assets/facility-survival.css?v=proximity-r4">
+<script src="assets/facility-survival.js?v=proximity-r4"></script>
+<script src="assets/facility-world.js?v=proximity-r4"></script>
+<script src="assets/facility-relay.js?v=proximity-r4"></script>
+<script src="assets/facility-coop.js?v=proximity-r4"></script>
 <script id="facility-direct-entry">
 (function(){
   let tries=0,done=false;

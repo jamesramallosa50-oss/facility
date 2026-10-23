@@ -174,7 +174,7 @@
  }
  function runnerAnimation(a,dt,speed){
   if(!a?.mix)return;a.action.paused=speed<.05;a.action.timeScale=clamp(speed/4.6,.7,1.5);a.mix.update(dt);
-  const cfg=a.cfg;cfg.visual.updateMatrixWorld(true);if(cfg.anchor){const p=cfg.anchor.getWorldPosition(a.anchorPoint||(a.anchorPoint=new T.Vector3()));cfg.offset.worldToLocal(p);cfg.offset.position.x=-p.x;cfg.offset.position.z=-p.z;}
+  const cfg=a.cfg;cfg.visual.updateWorldMatrix(true,true);if(cfg.anchor){const inverse=a.anchorInverse||(a.anchorInverse=new T.Matrix4());inverse.copy(cfg.offset.matrixWorld).invert();const p=(a.anchorPoint||(a.anchorPoint=new T.Vector3())).setFromMatrixPosition(cfg.anchor.matrixWorld).applyMatrix4(inverse);cfg.offset.position.x=-p.x;cfg.offset.position.z=-p.z;cfg.offset.updateWorldMatrix(false,true);}
   a.g.position.set(a.x,a.y,a.z);a.g.rotation.y=a.face;
  }
  function runnerTick(F,dt){

@@ -410,7 +410,7 @@ test('room parameters survive the game loader and asset updates invalidate old g
   const script=[...fs.readFileSync(path.join(root,'game.html'),'utf8').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)][0][1];
   vm.runInNewContext(script,{URL,location,document:{getElementById:()=>link}});const u=new URL(location.redirect);
   assert.equal(u.searchParams.get('room'),'ABC234');assert.equal(u.searchParams.get('coop'),'join');assert.equal(u.searchParams.get('name'),'Kai');assert.equal(u.searchParams.get('facility'),'1');
-  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-performance-r3-20261021'));assert(!sw.includes("pathname.includes('/assets/')"));
+  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-proximity-r4-20261022'));assert(!sw.includes("pathname.includes('/assets/')"));
   const code=fs.readFileSync(path.join(root,'index.html'),'utf8');assert(code.includes('PLAY CO-OP'));assert(code.includes('facility-menu.js'));assert(html.includes('assets/facility-coop.js'));
 });
 
@@ -640,4 +640,27 @@ test('service worker preserves downloaded models across builds while refreshing 
   handlers.fetch({request:model,respondWith(p){task=p;}});assert.equal(await (await task).text(),'downloaded-model');assert.equal(fetched,0);
   handlers.fetch({request:new Request(origin+'/game-core.html'),respondWith(p){task=p;}});assert.equal(await (await task).text(),'fresh-code');assert.equal(fetched,1);
   let handled=false;handlers.fetch({request:new Request(origin+'/api/facility-room'),respondWith(){handled=true;}});assert(!handled,'Room API must always bypass the worker');
+});
+
+
+test('the close-up hunter stays below its geometry budget and keeps its native rig and motion',async()=>{
+  const loader=path.join(root,'assets/horror/gltf.js'),source=await parseSpider(T,path.join(root,'assets/horror/demon.glb'),loader),runtime=await parseSpider(T,path.join(root,'assets/horror/demon-runtime.glb'),loader);
+  const meshOf=g=>{let mesh;g.scene.traverse(o=>{if(o.isSkinnedMesh)mesh=o;});return mesh;},original=meshOf(source),hunter=meshOf(runtime);
+  assert(original&&hunter);assert.equal(original.geometry.index.count/3,858335);assert(hunter.geometry.index.count/3<=30000,'A visible hunter must not submit the 858k-triangle source mesh');
+  assert(hunter.geometry.attributes.position.count<30000);assert.equal(hunter.skeleton.bones.length,24);assert.deepEqual(Array.from(hunter.skeleton.bones,b=>b.name),Array.from(original.skeleton.bones,b=>b.name));
+  assert.equal(runtime.animations.length,source.animations.length);assert.equal(runtime.animations[0].tracks.length,source.animations[0].tracks.length);assert(Math.abs(runtime.animations[0].duration-source.animations[0].duration)<1e-5);
+  const mixers=[new T.AnimationMixer(source.scene),new T.AnimationMixer(runtime.scene)];mixers[0].clipAction(source.animations[0]).play();mixers[1].clipAction(runtime.animations[0]).play();
+  for(const time of [0,.07,.19,.33,.49]){
+    mixers.forEach(m=>m.setTime(time));source.scene.updateMatrixWorld(true);runtime.scene.updateMatrixWorld(true);
+    for(let i=0;i<24;i++){const a=original.skeleton.bones[i].matrixWorld.elements,b=hunter.skeleton.bones[i].matrixWorld.elements;for(let j=0;j<16;j++)assert(Math.abs(a[j]-b[j])<.0002,'Animation changed at bone '+i+' time '+time);}
+    const bounds=new T.Box3(),v=new T.Vector3();hunter.skeleton.update();for(let i=0;i<hunter.geometry.attributes.position.count;i+=13){v.fromBufferAttribute(hunter.geometry.attributes.position,i);hunter.boneTransform(i,v);bounds.expandByPoint(v.applyMatrix4(hunter.matrixWorld));}assert(!bounds.isEmpty()&&bounds.min.toArray().every(Number.isFinite)&&bounds.max.toArray().every(Number.isFinite));
+  }
+  const bytes=fs.readFileSync(path.join(root,'assets/horror/demon-runtime.glb')),jn=bytes.readUInt32LE(12),doc=JSON.parse(bytes.subarray(20,20+jn));assert(bytes.length<2000000);assert.equal(doc.asset.extras.facility_optimization.texture_limit,1024);
+  assert(section('async function hzLoadDemon(prog){','/* ---------- an idle animation').includes("assets/horror/demon-runtime.glb?v=proximity-r4"),'The game must actually load the optimized hunter');
+  console.info('Visible hunter triangles:',hunter.geometry.index.count/3,'; source:',original.geometry.index.count/3);
+});
+test('ghost animation updates its rig without walking unrelated scenery',()=>{
+  const {ctx,A,F}=harness();A.facHauntInit(F);const actor=F.haunt.actors.find(a=>a.ghost),scenery=new T.Group();F.scene.add(scenery);let unrelatedUpdates=0;
+  for(let i=0;i<100;i++){const o=new T.Object3D();scenery.add(o);const update=o.updateMatrixWorld;o.updateMatrixWorld=function(...args){unrelatedUpdates++;return update.apply(this,args);};const world=o.updateWorldMatrix;o.updateWorldMatrix=function(...args){unrelatedUpdates++;return world.apply(this,args);};}
+  for(let i=0;i<120;i++)ctx.FacilityGhost.tick(actor.ghost,2.5,1/60,'walk');assert.equal(unrelatedUpdates,0,'Animating a nearby ghost must not update the whole level twice per frame');A.facHauntDispose(F);
 });
