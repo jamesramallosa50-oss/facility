@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>The Facility — Night Courtyard</title>
-<meta name="facility-build" content="proximity-r4-20261022">
+<meta name="facility-build" content="chase-r5-20261024">
 <meta name="theme-color" content="#060807">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="mobile-web-app-capable" content="yes">
@@ -14719,7 +14719,8 @@ function facGeomBoxes(W,B){
 function facBeam(B,p0,p1,w,m,t,o){const d=[p1[0]-p0[0],p1[1]-p0[1],p1[2]-p0[2]],L=Math.hypot(d[0],d[1],d[2]);if(L<1e-3)return;const f=[d[0]/L,d[1]/L,d[2]/L];
   let up=Math.abs(f[1])>.9?[1,0,0]:[0,1,0];let s=[f[1]*up[2]-f[2]*up[1],f[2]*up[0]-f[0]*up[2],f[0]*up[1]-f[1]*up[0]];let sl=Math.hypot(s[0],s[1],s[2]);s=s.map(v=>v/sl);
   const u=[s[1]*f[2]-s[2]*f[1],s[2]*f[0]-s[0]*f[2],s[0]*f[1]-s[1]*f[0]],c=[(p0[0]+p1[0])/2,(p0[1]+p1[1])/2,(p0[2]+p1[2])/2],h=w/2,E=[f[0]*L/2,f[1]*L/2,f[2]*L/2];
-  for(const [nv,ov] of[[s,u],[u,s]])for(const sg of[1,-1]){const n=nv.map(v=>v*sg);B.quad(m,[c[0]+n[0]*h,c[1]+n[1]*h,c[2]+n[2]*h],E,ov.map(v=>v*h),n,o&&o.uv?o.uv:(p=>[0,0]),t,0,null,o&&o.em);}
+  for(const [nv,ov] of[[s,u],[u,s]])for(const sg of[1,-1]){const n=nv.map(v=>v*sg);B.quad(m,[c[0]+n[0]*h,c[1]+n[1]*h,c[2]+n[2]*h],E,ov.map(v=>v*h),n,o&&o.uv?o.uv:facUV(m,n,0),t,0,null,o&&o.em);}
+  for(const [p,sign]of[[p0,-1],[p1,1]]){const n=f.map(v=>v*sign);B.quad(m,p,s.map(v=>v*h),u.map(v=>v*h),n,o&&o.uv?o.uv:facUV(m,n,0),t,0,null,o&&o.em);}
 }
 function facGeomRails(W,B){
   for(const r of W.rails){const L=Math.hypot(r.x1-r.x0,r.z1-r.z0),n=Math.max(1,Math.ceil(L/1.15)),kd=facKindAt(W,Math.floor((r.z0+r.z1)/2/FC)*FNX+Math.floor((r.x0+r.x1)/2/FC),Math.max(r.y,r.y2)+.5);
@@ -15339,7 +15340,7 @@ function facPush(F,e,r,h,su,skipDoor){
   const seen=F.seen||(F.seen=new Set());seen.clear();
   for(let j=Math.floor((e.z-r)/2);j<=Math.floor((e.z+r)/2);j++)for(let i=Math.floor((e.x-r)/2);i<=Math.floor((e.x+r)/2);i++){const L=W.bh.get(j*64+i);if(!L)continue;
     for(const b of L){if(seen.has(b))continue;seen.add(b);if(b.off||b.y1<=y0||b.y0>=y1)continue;rect(b.x0,b.z0,b.x1,b.z1);}}
-  for(const d of F.doors){if(d===skipDoor||Math.abs(d.y-e.y)>2.5)continue;const s=facDoorSeg(d),ex=s[2]-s[0],ez=s[3]-s[1],L2=ex*ex+ez*ez;
+  for(const d of F.doors){if(d===skipDoor||Math.abs(d.y-e.y)>2.5||Math.abs(e.x-d.hx)>d.w+r+.06||Math.abs(e.z-d.hz)>d.w+r+.06)continue;const s=facDoorSeg(d),ex=s[2]-s[0],ez=s[3]-s[1],L2=ex*ex+ez*ez;
     let t=((e.x-s[0])*ex+(e.z-s[1])*ez)/L2;t=t<0?0:t>1?1:t;const qx=s[0]+ex*t,qz=s[1]+ez*t;let dx=e.x-qx,dz=e.z-qz;const d2=dx*dx+dz*dz,R=r+.045;
     if(d2<R*R){const dd=Math.sqrt(d2)||1e-4;if(d2<1e-8){dx=-ez;dz=ex;}const p=R-dd,l=Math.hypot(dx,dz)||1;e.x+=dx/l*p;e.z+=dz/l*p;pen=Math.max(pen,p);moved=true;if(e.isBody===1)d.bump=(d.bump||0)+1;
       /* a body leaning on the leaf turns it on its hinge: the push, the lever arm and the leaf's direction of travel */
@@ -15355,7 +15356,7 @@ function facDoorSweep(F,e,ox,oz,nx,nz,r,h,su){
   const len=Math.hypot(nx-ox,nz-oz),steps=Math.max(1,Math.ceil(len/.04));
   for(const d of F.doors){
     if(e.y+su>=d.y+2.3||e.y+h<=d.y)continue;
-    if(Math.hypot(ox-d.hx,oz-d.hz)>d.w+r+len+.1)continue;
+    const reach=d.w+r+len+.1;if(Math.abs(ox-d.hx)>reach||Math.abs(oz-d.hz)>reach||Math.hypot(ox-d.hx,oz-d.hz)>reach)continue;
     const old=facDoorDistance(d,ox,oz),end=facDoorDistance(d,nx,nz),R=r+.044;
     if(old<R-.006){
       const a=d.a0+d.th,nx_=-Math.sin(a),nz_=Math.cos(a),s0=(ox-d.hx)*nx_+(oz-d.hz)*nz_,s1=(nx-d.hx)*nx_+(nz-d.hz)*nz_;
@@ -15399,7 +15400,7 @@ function facSee(F,ax,ay,az,bx,by,bz,props){
   const W=F.W,dx=bx-ax,dy=by-ay,dz=bz-az,L=Math.hypot(dx,dy,dz);if(L<.1)return true;const st=.2,n=Math.floor(L/st),V=W.V;
   for(let i=1;i<n;i++){const t=i*st/L,x=ax+dx*t,y=ay+dy*t,z=az+dz*t,ii=(x/FC)|0,jj=(z/FC)|0,kk=(y/FVY)|0;
     if(x<0||z<0||y<0||ii>=FNX||jj>=FNZ||kk>=FNY)return false;const v=V[(jj*FNX+ii)*FNY+kk];if(v===1||(v===2&&props))return false;}
-  for(const d of F.doors){if(Math.abs(d.th)>1.35)continue;const s=facDoorSeg(d);if(Math.min(ay,by)>d.y+2.26||Math.max(ay,by)<d.y)continue;
+  for(const d of F.doors){if(Math.abs(d.th)>1.35||Math.min(ay,by)>d.y+2.26||Math.max(ay,by)<d.y)continue;const reach=d.w+.06;if(Math.max(ax,bx)<d.hx-reach||Math.min(ax,bx)>d.hx+reach||Math.max(az,bz)<d.hz-reach||Math.min(az,bz)>d.hz+reach)continue;const s=facDoorSeg(d);
     const den=(bx-ax)*(s[3]-s[1])-(bz-az)*(s[2]-s[0]);if(Math.abs(den)<1e-6)continue;const t=((s[0]-ax)*(s[3]-s[1])-(s[1]-az)*(s[2]-s[0]))/den,u=((s[0]-ax)*(bz-az)-(s[1]-az)*(bx-ax))/den;
     if(t>0&&t<1&&u>=0&&u<=1){const yy=ay+(by-ay)*t;if(yy>d.y&&yy<d.y+2.26)return false;}}
   return true;
@@ -15429,29 +15430,18 @@ function facNav(F){
         if(segBlocked((nx[a]+.5)*FC,(nz[a]+.5)*FC,(nx[b]+.5)*FC,(nz[b]+.5)*FC,Math.max(ny[a],ny[b])))continue;
         const d=Math.hypot(Math.hypot(di,dj)*FC,ny[b]-ny[a])*(1+.5*(pen[a]+pen[b]));adj[a].push(b,d);adj[b].push(a,d);}}}
   /* drops and climbs: the creature can jump down a ledge, or leap back up it */
-  F.links=[];for(const l of W.links){const a=nodeAt(Math.floor(l.a[0]/FC),Math.floor(l.a[2]/FC),l.a[1],.3),b=nodeAt(Math.floor(l.b[0]/FC),Math.floor(l.b[2]/FC),l.b[1],.3);
+  F.links=[];F.linkSet=new Set();for(const l of W.links){const a=nodeAt(Math.floor(l.a[0]/FC),Math.floor(l.a[2]/FC),l.a[1],.3),b=nodeAt(Math.floor(l.b[0]/FC),Math.floor(l.b[2]/FC),l.b[1],.3);
     if(a<0||b<0)continue;adj[a].push(b,3);adj[b].push(a,5);F.links.push({a,b});(F.linkSet||(F.linkSet=new Set())).add(a*65536+b);F.linkSet.add(b*65536+a);}
   /* door cells: the creature has to open or smash the door */
   const doorOf=new Int16Array(N).fill(-1);F.doors.forEach((d,di)=>{for(let j=Math.round(d.z0/FC);j<Math.round(d.z1/FC);j++)for(let i=Math.round(d.x0/FC);i<Math.round(d.x1/FC);i++){const L=cell.get(j*FNX+i);if(L)for(const n of L)if(Math.abs(ny[n]-d.y)<.6)doorOf[n]=di;}});
-  F.nav={nx,nz,ny,cell,adj,N,pen,doorOf,nodeAt};
+  F.nav={nx,nz,ny,cell,adj,N,pen,doorOf,nodeAt};window.FacilityNavigation.prepare(F);
 }
 function facNodeNear(F,x,y,z){const N=F.nav,i=Math.floor(x/FC),j=Math.floor(z/FC);let best=-1,bd=1e9;
   for(let r=0;r<=3&&best<0;r++)for(let dj=-r;dj<=r;dj++)for(let di=-r;di<=r;di++){if(Math.max(Math.abs(di),Math.abs(dj))!==r)continue;const L=N.cell.get((j+dj)*FNX+(i+di));if(!L)continue;
     for(const n of L){const d=Math.abs(N.ny[n]-y)*2+Math.hypot(di,dj)*FC;if(Math.abs(N.ny[n]-y)<1.2&&d<bd){bd=d;best=n;}}}return best;}
 function facNP(F,n){const N=F.nav;return [(N.nx[n]+.5)*FC,N.ny[n],(N.nz[n]+.5)*FC];}
 /* A*: the shortest walk from node a to node b */
-function facPath(F,a,b,maxN,noLinks){
-  const N=F.nav;if(a<0||b<0)return null;if(a===b)return [a];
-  const g=F.pg||(F.pg=new Float32Array(N.N)),from=F.pf||(F.pf=new Int32Array(N.N)),mark=F.pm||(F.pm=new Uint32Array(N.N));F.pgen=(F.pgen||0)+1;const gen=F.pgen;
-  const cl=F.pc||(F.pc=new Uint32Array(N.N));
-  const bx=(N.nx[b]+.5)*FC,bz=(N.nz[b]+.5)*FC,by=N.ny[b],hh=n=>Math.hypot((N.nx[n]+.5)*FC-bx,(N.nz[n]+.5)*FC-bz,N.ny[n]-by);
-  const heap=[],push=(n,f)=>{heap.push([f,n]);let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(heap[p][0]<=heap[i][0])break;[heap[p],heap[i]]=[heap[i],heap[p]];i=p;}};
-  const pop=()=>{const top=heap[0],last=heap.pop();if(heap.length){heap[0]=last;let i=0;for(;;){const l=i*2+1,r=l+1;let m=i;if(l<heap.length&&heap[l][0]<heap[m][0])m=l;if(r<heap.length&&heap[r][0]<heap[m][0])m=r;if(m===i)break;[heap[m],heap[i]]=[heap[i],heap[m]];i=m;}}return top;};
-  mark[a]=gen;g[a]=0;from[a]=-1;push(a,hh(a));let it=0;
-  while(heap.length){const [f,n]=pop();if(n===b)break;if(cl[n]===gen)continue;cl[n]=gen;if(++it>(maxN||30000))return null;const gn=g[n],A=N.adj[n];
-    for(let k=0;k<A.length;k+=2){const m=A[k],ng=gn+A[k+1];if(noLinks&&F.linkSet&&F.linkSet.has(n*65536+m))continue;if(mark[m]!==gen||ng<g[m]){mark[m]=gen;g[m]=ng;from[m]=n;push(m,ng+hh(m));}}}
-  if(mark[b]!==gen)return null;const out=[];for(let n=b;n>=0;n=from[n]){out.push(n);if(n===a)break;}out.reverse();return out;
-}
+function facPath(F,a,b,maxN,noLinks){return window.FacilityNavigation.path(F,a,b,maxN,noLinks);}
 /* can a body walk straight from p to q (same storey, nothing in the way)? */
 function facWalkLine(F,ax,ay,az,bx,by,bz){
   const N=F.nav,BH=F.W.bh,L=Math.hypot(bx-ax,bz-az);if(L<.05)return true;const n=Math.ceil(L/.2),px=-(bz-az)/L*.26,pz=(bx-ax)/L*.26;let y=ay;
@@ -15739,9 +15729,9 @@ function facDemonInit(F){
   for(const d of F.doors)if(Math.abs(d.cx-6.25)<.3&&Math.abs(d.cz-3)<.6&&d.k===1){d.th=d.tgt=-1.5*facDoorSide(d,10,3);d.mesh.rotation.y=-(d.a0+d.th);}
   F.dir={t:0,calm:0,lastSeen:0,lastChase:0,ambT:42,awayT:0,alertAt:-1,final:false,seenOnce:false,graceUntil:F.t+22,recoverUntil:0};
 }
-function facDmPlace(F,x,y,z,face){const dm=F.dm;dm.x=x;dm.y=y;dm.z=z;if(face!=null)dm.face=face;dm.path=null;dm.repT=0;dm.on=true;dm.g.visible=true;dm.leap=null;dm.bash=null;dm.safeUntil=F.t+2;dm.grabT=0;dm.alert=0;dm.sees=0;dm.lastVisual=-99;}
+function facDmPlace(F,x,y,z,face){const dm=F.dm;dm.x=x;dm.y=y;dm.z=z;if(face!=null)dm.face=face;dm.path=null;dm.route=null;dm.repT=0;dm.on=true;dm.g.visible=true;dm.leap=null;dm.bash=null;dm.safeUntil=F.t+2;dm.grabT=0;dm.alert=0;dm.sees=0;dm.lastVisual=-99;}
 function facDmState(F,st){const dm=F.dm;if(dm.st!==st){
-  dm.prev=dm.st;dm.st=st;dm.stT=0;dm.path=null;dm.repT=0;dm.grabT=0;
+  dm.prev=dm.st;dm.st=st;dm.stT=0;dm.path=null;dm.route=null;dm.repT=0;dm.grabT=0;
   if(st==='chase'){dm.safeUntil=Math.max(dm.safeUntil||0,F.t+1.2);dm.lastVisual=F.t;}
   if(st==='search'){dm.sp=null;dm.looks=0;if(dm.prev==='chase'){F.dir.recoverUntil=F.t+14;dm.alert=0;}}
   if(st==='prowl')dm.goalP=null;
@@ -15773,17 +15763,19 @@ function facDmWaypoint(F,n){
 }
 function facDmGo(F,tx,ty,tz,spd,dt){
   const dm=F.dm,N=F.nav;
-  if(dm.recover){const R=dm.recover;R.t-=dt;const dx=R.x-dm.x,dz=R.z-dm.z,l=Math.hypot(dx,dz);if(l>.05&&R.t>0){const step=Math.min(l,spd*dt);facMove(F,dm,dx/l*step,dz/l*step,FDM.r,FDM.h,FDM.su);dm.fwant=Math.atan2(dx,dz);facDmGround(F);return 'move';}dm.recover=null;dm.path=null;dm.repT=0;dm.lineT=0;}
+  if(dm.recover){const R=dm.recover;R.t-=dt;const dx=R.x-dm.x,dz=R.z-dm.z,l=Math.hypot(dx,dz);if(l>.05&&R.t>0){const step=Math.min(l,spd*dt);facMove(F,dm,dx/l*step,dz/l*step,FDM.r,FDM.h,FDM.su);dm.fwant=Math.atan2(dx,dz);facDmGround(F);return 'move';}dm.recover=null;dm.path=null;dm.route=null;dm.repT=0;dm.lineT=0;}
   if(dm.leap){const L=dm.leap;L.t+=dt;const k=Math.min(1,L.t/L.dur),x=L.a[0]+(L.b[0]-L.a[0])*k,z=L.a[2]+(L.b[2]-L.a[2])*k,y=L.a[1]+(L.b[1]-L.a[1])*k+Math.sin(k*Math.PI)*(L.up?1.1:.6);
-    dm.x=x;dm.y=y;dm.z=z;dm.fwant=Math.atan2(L.b[0]-L.a[0],L.b[2]-L.a[2]);if(k>=1){dm.leap=null;dm.y=L.b[1];facDmLand(F);dm.path=null;dm.repT=0;}return 'leap';}
+    dm.x=x;dm.y=y;dm.z=z;dm.fwant=Math.atan2(L.b[0]-L.a[0],L.b[2]-L.a[2]);if(k>=1){dm.leap=null;dm.y=L.b[1];facDmLand(F);dm.path=null;dm.route=null;dm.repT=0;}return 'leap';}
   if(dm.bash){const B=dm.bash;B.t+=dt;dm.fwant=Math.atan2(B.d.cx-dm.x,B.d.cz-dm.z);if(B.t>=B.dur){if(!B.done){B.done=1;facDoorOpen(F,B.d,dm.x,dm.z,B.fast);if(B.fast){facNoise(F,B.d.cx,B.d.y,B.d.cz,22);F.shake=Math.max(F.shake||0,.4*clamp(1-Math.hypot(F.pl.x-dm.x,F.pl.z-dm.z)/12,0,1));}}
       if(Math.abs(B.d.th)>1.38)dm.bash=null;}return 'bash';}
   // A clear physical capsule path avoids zigzags between grid centres.
   dm.lineT=(dm.lineT||0)-dt;
   if(dm.lineT<=0){dm.lineT=.16;dm.direct=facHauntClear(F,{x:dm.x,y:dm.y,z:dm.z,radius:FDM.r,height:FDM.h},tx,ty,tz);}
-  if(dm.direct&&Math.abs(ty-dm.y)<.3){const dx=tx-dm.x,dz=tz-dm.z,l=Math.hypot(dx,dz);if(l<.1)return 'there';const step=Math.min(l,spd*dt);facMove(F,dm,dx/l*step,dz/l*step,FDM.r,FDM.h,FDM.su);dm.fwant=Math.atan2(dx,dz);facDmGround(F);return 'move';}
+  if(dm.direct&&Math.abs(ty-dm.y)<.3){dm.route=null;dm.path=null;dm.repT=0;const dx=tx-dm.x,dz=tz-dm.z,l=Math.hypot(dx,dz);if(l<.1)return 'there';const step=Math.min(l,spd*dt);facMove(F,dm,dx/l*step,dz/l*step,FDM.r,FDM.h,FDM.su);dm.fwant=Math.atan2(dx,dz);facDmGround(F);return 'move';}
   dm.repT=(dm.repT||0)-dt;const goal=facNodeNear(F,tx,ty,tz);
-  if(dm.repT<=0){dm.repT=dm.st==='chase'?.3:1.2;dm.goal=goal;const a=facNodeNear(F,dm.x,dm.y,dm.z);dm.path=facPath(F,a,goal);dm.pi=0;dm.ahead=null;dm.wlT=0;}
+  const route=window.FacilityNavigation.route(F,dm,facNodeNear(F,dm.x,dm.y,dm.z),goal,dm.repT<=0);
+  if(route?.done&&!route.delivered){route.delivered=true;dm.repT=dm.st==='chase'?.35:1.2;dm.goal=route.goal;dm.path=route.path;dm.pi=0;dm.ahead=null;dm.wlT=0;}
+  if(!dm.path&&route&&!route.done)return 'move';
   const P=dm.path;if(!P||P.length<2){/* no route: walk straight if it is close */const dx=tx-dm.x,dz=tz-dm.z,l=Math.hypot(dx,dz),sameY=Math.abs(ty-dm.y)<1.2;if(l<.4&&sameY)return 'there';if(!sameY&&l<.4)return 'move';
     facMove(F,dm,dx/l*spd*dt,dz/l*spd*dt,FDM.r,FDM.h,FDM.su);dm.fwant=Math.atan2(dx,dz);facDmGround(F);return l<1&&sameY?'there':'move';}
   /* drop the nodes already behind */
@@ -15803,11 +15795,11 @@ function facDmGo(F,tx,ty,tz,spd,dt){
   const last=dm.pi>=P.length-1;if(last&&l<.35)return 'there';
   const st=Math.min(l,spd*dt);if(l>1e-3){const ox=dm.x,oz=dm.z;facMove(F,dm,dx/l*st,dz/l*st,FDM.r,FDM.h,FDM.su);dm.fwant=Math.atan2(dx,dz);
     /* stuck against something: think again */
-    if(Math.hypot(dm.x-ox,dm.z-oz)<st*.2){dm.stuck=(dm.stuck||0)+dt;if(dm.stuck>.65){dm.stuck=0;dm.path=null;dm.repT=0;dm.pi=0;dm.lineT=0;for(const sign of[1,-1]){const x=dm.x-dz/Math.max(l,.001)*sign*.65,z=dm.z+dx/Math.max(l,.001)*sign*.65;if(facHauntClear(F,{x:dm.x,y:dm.y,z:dm.z,radius:FDM.r,height:FDM.h},x,dm.y,z)){dm.recover={x,z,t:.65};break;}}}}else dm.stuck=0;}
+    if(Math.hypot(dm.x-ox,dm.z-oz)<st*.2){dm.stuck=(dm.stuck||0)+dt;if(dm.stuck>.65){dm.stuck=0;dm.path=null;dm.route=null;dm.repT=0;dm.pi=0;dm.lineT=0;for(const sign of[1,-1]){const x=dm.x-dz/Math.max(l,.001)*sign*.65,z=dm.z+dx/Math.max(l,.001)*sign*.65;if(facHauntClear(F,{x:dm.x,y:dm.y,z:dm.z,radius:FDM.r,height:FDM.h},x,dm.y,z)){dm.recover={x,z,t:.65};break;}}}}else dm.stuck=0;}
   facDmGround(F);
   const g=facDmWaypoint(F,P[P.length-1]);return Math.hypot(g[0]-dm.x,g[2]-dm.z)<.6&&Math.abs(g[1]-dm.y)<1?'there':'move';
 }
-function facDmGround(F){const dm=F.dm,g=facGround(F,dm.x,dm.z,dm.y,FDM.su);if(!Number.isFinite(g)||g< -1e8){dm.path=null;dm.repT=0;return;}if(g>dm.y-.7)dm.y+=(g-dm.y)*.6;else dm.y=Math.max(g,dm.y-.3);}
+function facDmGround(F){const dm=F.dm,g=facGround(F,dm.x,dm.z,dm.y,FDM.su);if(!Number.isFinite(g)||g< -1e8){if(dm.safeX!=null){dm.x=dm.safeX;dm.y=dm.safeY;dm.z=dm.safeZ;}dm.path=null;dm.route=null;dm.repT=Math.max(dm.repT||0,.35);dm.lineT=0;return;}if(g>dm.y-.7)dm.y+=(g-dm.y)*.6;else dm.y=Math.max(g,dm.y-.3);dm.safeX=dm.x;dm.safeY=dm.y;dm.safeZ=dm.z;}
 /* a random spot within reach of (x,y,z), ideally out of your sight */
 function facDmSpot(F,x,y,z,rMin,rMax,hidden,tries){const N=F.nav;
   for(let t=0;t<(tries||40);t++){const n=(Math.random()*N.N)|0,p=facNP(F,n),d=Math.hypot(p[0]-x,(p[1]-y)*1.5,p[2]-z);if(d<rMin||d>rMax)continue;
@@ -16161,7 +16153,7 @@ function facHauntSpawn(F,kind,p,mode,door){
   const ground=facGround(F,pos.x,pos.z,pos.y,.35);if(!Number.isFinite(ground)||Math.abs(ground-pos.y)>.35)return false;pos.y=ground;
   if(a.spider&&mode!=='door')mode='hunt';
   S.netSerial=(S.netSerial||0)+1;
-  Object.assign(a,{x:pos.x,y:pos.y,z:pos.z,age:0,mode,door:door||null,on:true,revealed:mode!=='door',path:null,pi:0,repath:0,lineT:0,direct:false,seen:0,stung:false,doorAt:0,stuck:0,aware:false,lastSeen:0,target:null,targetId:F.pl.netId||'local',serial:S.netSerial,chaseAt:0,contact:0,reaction:mode==='door'?FSP.doorReaction:FSP.reaction,life:a.spider?FSP.life:mode==='hunt'?6:mode==='watch'?5:2.4});
+  Object.assign(a,{x:pos.x,y:pos.y,z:pos.z,age:0,mode,door:door||null,on:true,revealed:mode!=='door',path:null,route:null,pi:0,repath:0,lineT:0,direct:false,seen:0,stung:false,doorAt:0,stuck:0,aware:false,lastSeen:0,target:null,targetId:F.pl.netId||'local',serial:S.netSerial,chaseAt:0,contact:0,reaction:mode==='door'?FSP.doorReaction:FSP.reaction,life:a.spider?FSP.life:mode==='hunt'?6:mode==='watch'?5:2.4});
   if(a.spider)window.FacilitySpider.reset(a.spider);if(a.ghost)window.FacilityGhost.reset(a.ghost);
   a.g.position.set(a.x,a.y,a.z);a.g.rotation.y=Math.atan2(F.pl.x-a.x,F.pl.z-a.z);a.g.visible=a.revealed;S.active=a;S.next=F.t+38+Math.random()*18;return true;
 }
@@ -16178,7 +16170,7 @@ function facHauntSting(F,a){
   facPS(F,a?a.x:F.pl.x,F.camY,a?a.z:F.pl.z,o=>{sfxT(o,62,28,.6,'sine',.35);sfxN(o,.36,.16,1250,'bandpass',0,1.4);sfxT(o,460,140,.5,'sawtooth',.06);},1);
   if(F.post&&meta.flash!==false)F.post.mat.uniforms.uHurt.value=Math.max(F.post.mat.uniforms.uHurt.value,.12);
 }
-function facHauntEnd(F){const S=F.haunt,a=S&&S.active;if(!a)return;a.on=false;a.g.visible=false;if(a.spider){a.spider.walk.paused=a.spider.run.paused=true;}S.active=null;S.next=Math.max(S.next,F.t+24);}
+function facHauntEnd(F){const S=F.haunt,a=S&&S.active;if(!a)return;a.on=false;a.g.visible=false;a.route=null;if(a.spider){a.spider.walk.paused=a.spider.run.paused=true;}S.active=null;S.next=Math.max(S.next,F.t+24);}
 /* Test the actual creature capsule, including props, floor and physical door
    leaves. Navigation cells alone are narrower than the enlarged spider. */
 function facHauntClear(F,a,tx,ty,tz){
@@ -16195,16 +16187,17 @@ function facHauntWalk(F,a,tx,ty,tz,speed,dt){
   a.repath=(a.repath||0)-dt;a.lineT=(a.lineT||0)-dt;
   if(a.lineT<=0){a.lineT=.18;a.direct=facHauntClear(F,a,tx,ty,tz);}
   let p;
-  if(a.direct)p=[tx,ty,tz];
+  if(a.direct){a.route=null;a.path=null;a.repath=0;p=[tx,ty,tz];}
   else{
-    if(a.repath<=0){a.repath=.45;const goal=facNodeNear(F,tx,ty,tz);a.goal=goal;a.path=facPath(F,facNodeNear(F,a.x,a.y,a.z),goal,30000,true);a.pi=1;}
+    const goal=facNodeNear(F,tx,ty,tz),route=window.FacilityNavigation.route(F,a,facNodeNear(F,a.x,a.y,a.z),goal,a.repath<=0,true);
+    if(route?.done&&!route.delivered){route.delivered=true;a.repath=.45;a.goal=route.goal;a.path=route.path;a.pi=1;}
     if(!a.path)return;
     // Skip reached nodes within the same frame. Returning at every node used
     // to interrupt the gait and throw away a large part of the chase speed.
     while(a.pi<a.path.length){
       const node=a.path[a.pi],point=facNP(F,node),di=F.nav.doorOf[node];
       if(di>=0){
-        const door=F.doors[di];if(door.lock){a.path=null;a.repath=.45;return;}
+        const door=F.doors[di];if(door.lock){a.path=null;a.route=null;a.repath=.45;return;}
         point[0]=door.cx;point[2]=door.cz;
         if(Math.abs(door.th)<1.4){
           if(F.t>=(a.doorAt||0)&&Math.abs(door.tgt)<1.4){facDoorOpen(F,door,a.x,a.z,false);a.doorAt=F.t+1;}
@@ -16225,7 +16218,7 @@ function facHauntWalk(F,a,tx,ty,tz,speed,dt){
   a.g.rotation.y+=clamp(turn,-dt*9,dt*9);
   const ox=a.x,oz=a.z;facMove(F,a,(p[0]-a.x)/d*step,(p[2]-a.z)/d*step,a.radius||.26,a.height||1.9,a.spider?.28:.4);
   const ground=facGround(F,a.x,a.z,a.y,.35);if(Math.abs(ground-a.y)<.45)a.y=ground;
-  if(Math.hypot(a.x-ox,a.z-oz)<Math.min(.005,step*.15)){a.stuck=(a.stuck||0)+dt;if(a.stuck>.45){a.repath=0;a.path=null;a.lineT=0;a.stuck=0;}}else a.stuck=0;
+  if(Math.hypot(a.x-ox,a.z-oz)<Math.min(.005,step*.15)){a.stuck=(a.stuck||0)+dt;if(a.stuck>.45){a.repath=0;a.path=null;a.route=null;a.lineT=0;a.stuck=0;}}else a.stuck=0;
 }
 function facSpiderPursue(F,a,dt){
   const pl=F.coop?facHuntTarget(F,a,true):F.pl,level=Math.abs(a.y-pl.y)<.65,distance=Math.hypot(a.x-pl.x,a.z-pl.z);
@@ -20097,14 +20090,15 @@ fixBar();buildTitleLevel();resize();requestAnimationFrame(frame);
   document.getElementById('ro-skip').addEventListener('click',dismiss);
 })();
 </script>
-<script src="assets/horror/spider.js?v=proximity-r4-20261022"></script>
-<script src="assets/horror/ghost.js?v=proximity-r4-20261022"></script>
-<script src="assets/horror/signs.js?v=proximity-r4-20261022"></script>
-<link rel="stylesheet" href="assets/facility-survival.css?v=proximity-r4">
-<script src="assets/facility-survival.js?v=proximity-r4"></script>
-<script src="assets/facility-world.js?v=proximity-r4"></script>
-<script src="assets/facility-relay.js?v=proximity-r4"></script>
-<script src="assets/facility-coop.js?v=proximity-r4"></script>
+<script src="assets/horror/spider.js?v=chase-r5-20261024"></script>
+<script src="assets/horror/ghost.js?v=chase-r5-20261024"></script>
+<script src="assets/horror/signs.js?v=chase-r5-20261024"></script>
+<link rel="stylesheet" href="assets/facility-survival.css?v=chase-r5">
+<script src="assets/facility-navigation.js?v=chase-r5"></script>
+<script src="assets/facility-survival.js?v=chase-r5"></script>
+<script src="assets/facility-world.js?v=chase-r5"></script>
+<script src="assets/facility-relay.js?v=chase-r5"></script>
+<script src="assets/facility-coop.js?v=chase-r5"></script>
 <script id="facility-direct-entry">
 (function(){
   let tries=0,done=false;

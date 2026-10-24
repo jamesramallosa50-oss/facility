@@ -27,6 +27,7 @@ function harness(buildGeometry=false){
   };
   ctx.THREE=T;ctx.window=ctx;
   vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(path.join(root,'assets/facility-navigation.js'),'utf8'),ctx);
   vm.runInContext(fs.readFileSync(path.join(root,'assets/facility-survival.js'),'utf8'),ctx);
   vm.runInContext(fs.readFileSync(path.join(root,'assets/facility-coop.js'),'utf8'),ctx);
   vm.runInContext(spiderRuntime,ctx);vm.runInContext(ghostRuntime,ctx);vm.runInContext(signRuntime,ctx);
@@ -42,7 +43,7 @@ function harness(buildGeometry=false){
     section('function facNoise(F','/* ---------- looking at things you can use')+
     section('function facLook(F)','/* ---------- the creature ---------- */')+
     section('const FSP=','/* ---------- each frame ---------- */');
-  vm.runInContext(code+'\nglobalThis.api={facPlan,facGrid,facNav,facNodeNear,facNP,facPath,facMove,facPush,facPlayer,facGround,facDoorSeg,facDoorDistance,facDoorSweep,facDoorsInit,facDoorsTick,facDoorOpen,facHauntInit,facHauntDoor,facHauntWalk,facHauntTick,facHauntEnd,facHauntFree,facHauntSpawn,facHauntDispose,facHauntClear,facSpiderPursue,facDmCatch,facDmState,facDmReveal,facDmPlace,facDmGo,facDemonTick,facDirector,facDmSee,facWallLightMount,facWallLightGeo,facGeomLights,facLightsPrep,FDM,facGeomAll,facBake,FAC,FCY,FNX,FNZ,facHealthInit,facDamage,facHealthTick,facRevive,facHuntTarget,facPlayers,facNetRandom,facNetInput,facNetAction,facNetSnapshot,facNetWorld,facNetQueue,facCoopUse,facCoopConfig,facNetValidPose};',ctx);
+  vm.runInContext(code+'\nglobalThis.api={facPlan,facGrid,facNav,facNodeNear,facNP,facPath,facMove,facPush,facPlayer,facGround,facDoorSeg,facDoorDistance,facDoorSweep,facDoorsInit,facDoorsTick,facDoorOpen,facHauntInit,facHauntDoor,facHauntWalk,facHauntTick,facHauntEnd,facHauntFree,facHauntSpawn,facHauntDispose,facHauntClear,facSpiderPursue,facDmCatch,facDmState,facDmReveal,facDmPlace,facDmGo,facDemonTick,facDirector,facDmSee,facWallLightMount,facWallLightGeo,facGeomLights,facLightsPrep,FDM,facGeomAll,facBeam,facBuilder,facBake,FAC,FCY,FNX,FNZ,facHealthInit,facDamage,facHealthTick,facRevive,facHuntTarget,facPlayers,facNetRandom,facNetInput,facNetAction,facNetSnapshot,facNetWorld,facNetQueue,facCoopUse,facCoopConfig,facNetValidPose};',ctx);
   vm.runInContext('facDoorGeo=(F,M,d)=>window.FacilityWorld?.door(F,d)||({rotation:{y:0}});facLook=()=>{};',ctx);
   Object.assign(ctx.api,{facCoopStart:ctx.facCoopStart,facCoopTick:ctx.facCoopTick,facCoopDispose:ctx.facCoopDispose,facItems:ctx.facItems});
   const A=ctx.api,W=A.facPlan();A.facGrid(W);if(buildGeometry)A.facGeomAll(W);
@@ -53,7 +54,7 @@ function harness(buildGeometry=false){
 }
 const shared=harness(true);
 test('every inline script parses, including launch entry points',()=>{
-  for(const file of ['facility-survival.js','facility-coop.js','facility-menu.js','facility-world.js','facility-relay.js'])new vm.Script(fs.readFileSync(path.join(root,'assets',file),'utf8'),{filename:file});
+  for(const file of ['facility-navigation.js','facility-survival.js','facility-coop.js','facility-menu.js','facility-world.js','facility-relay.js'])new vm.Script(fs.readFileSync(path.join(root,'assets',file),'utf8'),{filename:file});
   for(const [name,code] of [['spider',spiderRuntime],['ghost',ghostRuntime],['signs',signRuntime]])new vm.Script(code,{filename:'assets/horror/'+name+'.js'});
   for(const file of ['game-core.html','game.html','index.html']){
     const h=fs.readFileSync(path.join(root,file),'utf8');
@@ -161,7 +162,7 @@ test('the uploaded spider retains its rig, geometry and animated walk/run poses'
 test('a creature waiting at a closed door requests opening once',()=>{
   const {ctx,A,F}=harness();let opens=0;
   F.nav={doorOf:[-1,0]};F.doors=[{cx:24,cz:3,hx:24,hz:2.52,y:4,w:.96,a0:Math.PI/2,th:0,tgt:0,lock:false}];
-  ctx.facNodeNear=()=>0;ctx.facPath=()=>[0,1];ctx.facNP=()=>[24,4,3];
+  ctx.facNodeNear=()=>0;ctx.FacilityNavigation.route=(F,a,start,goal,refresh)=>{if(refresh||!a.route)a.route={done:true,path:[0,1],goal:1,delivered:false};return a.route;};ctx.facNP=()=>[24,4,3];
   ctx.facDoorOpen=(F,d)=>{opens++;d.tgt=1.58;return true;};
   const a={x:22,y:4,z:3,g:new T.Group(),repath:0,path:null,pi:0};
   for(let i=0;i<60;i++){F.t+=1/60;A.facHauntWalk(F,a,26,4,3,3.9,1/60);}
@@ -410,7 +411,7 @@ test('room parameters survive the game loader and asset updates invalidate old g
   const script=[...fs.readFileSync(path.join(root,'game.html'),'utf8').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)][0][1];
   vm.runInNewContext(script,{URL,location,document:{getElementById:()=>link}});const u=new URL(location.redirect);
   assert.equal(u.searchParams.get('room'),'ABC234');assert.equal(u.searchParams.get('coop'),'join');assert.equal(u.searchParams.get('name'),'Kai');assert.equal(u.searchParams.get('facility'),'1');
-  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-proximity-r4-20261022'));assert(!sw.includes("pathname.includes('/assets/')"));
+  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-chase-r5-20261024'));assert(!sw.includes("pathname.includes('/assets/')"));
   const code=fs.readFileSync(path.join(root,'index.html'),'utf8');assert(code.includes('PLAY CO-OP'));assert(code.includes('facility-menu.js'));assert(html.includes('assets/facility-coop.js'));
 });
 
@@ -479,7 +480,7 @@ async function worldHarness(){
   return worldPromise=(async()=>{
     const h=harness(),{ctx,A,F}=h;vm.runInContext(fs.readFileSync(path.join(root,'assets/facility-world.js'),'utf8'),ctx);
     for(const name of ['hospital-door','outdoor-runner','backroom','garage','store','office']){const gl=await parseSpider(T,path.join(root,'assets/world',name+'.glb'),path.join(root,'assets/horror/gltf.js'));ctx.FacilityWorld.prepare(name,gl);}
-    const W=F.W=A.facPlan();A.facGrid(W);A.facDoorsInit(F,{});A.facNav(F);h.W=W;return h;
+    const W=F.W=A.facPlan();A.facGrid(W);A.facGeomAll(W);A.facDoorsInit(F,{});A.facNav(F);h.W=W;return h;
   })();
 }
 test('the expanded annex, service exit, road and uploaded Backrooms are physically reachable',async()=>{
@@ -663,4 +664,55 @@ test('ghost animation updates its rig without walking unrelated scenery',()=>{
   const {ctx,A,F}=harness();A.facHauntInit(F);const actor=F.haunt.actors.find(a=>a.ghost),scenery=new T.Group();F.scene.add(scenery);let unrelatedUpdates=0;
   for(let i=0;i<100;i++){const o=new T.Object3D();scenery.add(o);const update=o.updateMatrixWorld;o.updateMatrixWorld=function(...args){unrelatedUpdates++;return update.apply(this,args);};const world=o.updateWorldMatrix;o.updateWorldMatrix=function(...args){unrelatedUpdates++;return world.apply(this,args);};}
   for(let i=0;i<120;i++)ctx.FacilityGhost.tick(actor.ghost,2.5,1/60,'walk');assert.equal(unrelatedUpdates,0,'Animating a nearby ghost must not update the whole level twice per frame');A.facHauntDispose(F);
+});
+
+
+test('long chase searches share a bounded frame budget and eventually return valid routes',async()=>{
+  const {ctx,A,F}=await worldHarness(),nav=ctx.FacilityNavigation,actors=[{},{}],start=A.facNodeNear(F,11,4,8),goal=A.facNodeNear(F,77,4,81.5);
+  assert(start>=0&&goal>=0);const routes=[];let previous;
+  for(let i=0;i<1000&&routes.length<2;i++){
+    F.t+=1/60;for(const actor of actors){const job=nav.route(F,actor,start,goal,!actor.route,true);if(job.done&&!job.delivered){job.delivered=true;routes.push(job.path);}}
+    assert(F.pathBudget.nodes<=nav.limits.nodes,'All actors must share the per-frame expansion budget');
+    if(i===1)previous=actors[0].routeBuffers.heap;
+  }
+  assert.equal(routes.length,2);for(const route of routes){assert(route&&route.length>40);assert.equal(route[0],start);assert.equal(route.at(-1),goal);for(let i=1;i<route.length;i++)assert(F.nav.adj[route[i-1]].includes(route[i]),'A route must follow real graph edges');}
+  F.t+=1/60;actors[0].route.delivered=true;nav.route(F,actors[0],start,goal,true,true);assert.equal(actors[0].routeBuffers.heap,previous,'The heap must be reused instead of allocating thousands of pairs every search');
+});
+test('a nearby target in disconnected floor space does not scan the entire map',async()=>{
+  const {ctx,A,F}=await worldHarness(),start=A.facNodeNear(F,36.8,4,27.5),goal=A.facNodeNear(F,40,4,30);assert(start>=0&&goal>=0);
+  assert.notEqual(F.nav.components[start],F.nav.components[goal]);F.t+=.1;const job=ctx.FacilityNavigation.route(F,{},start,goal,true);assert(job.done);assert.equal(job.path,null);assert.equal(job.expanded,0);
+});
+test('a moving chase goal does not restart an unfinished route every frame',async()=>{
+  const {ctx,A,F}=await worldHarness(),owner={},start=A.facNodeNear(F,11,4,8),goal=A.facNodeNear(F,77,4,81.5);F.t+=1/60;
+  const first=ctx.FacilityNavigation.route(F,owner,start,goal,true,true);assert(!first.done,'A long path should yield rather than stall its first frame');
+  for(let i=0;i<4;i++){F.t+=1/60;const again=ctx.FacilityNavigation.route(F,owner,start,goal+i%2,true,true);assert.equal(again,first);}
+  owner.route=null;F.t+=1/60;const fresh=ctx.FacilityNavigation.route(F,owner,start,goal,true,true);assert.notEqual(fresh,first);assert(!F.pathJobs.includes(first),'Cancelled searches must leave the queue');
+});
+test('door collision broad phase only expands nearby leaves and preserves blocking',()=>{
+  const {ctx,A,F}=harness();A.facDoorsInit(F,{});F.W.bh=new Map();const leaf=ctx.facDoorSeg;let expanded=0;ctx.facDoorSeg=d=>{expanded++;return leaf(d);};
+  const e={x:11,y:4,z:8};A.facPush(F,e,.3,1.74,.46);assert(expanded<5,'Distant door trigonometry/arrays must not run for each capsule sample: '+expanded);
+  const d={hx:56,hz:22,y:4,w:1.46,a0:0,th:0};F.doors=[d];const close={x:56.7,y:4,z:22.1};assert(A.facPush(F,close,.3,1.74,.46)>.1);assert(close.z>22.3);
+});
+test('the service corridor keeps a solid separation from the switchback stairwell',async()=>{
+  const {W}=await worldHarness(),room=W.rooms.find(r=>r.nm==='SERVICE EXIT CORRIDOR');assert.equal(room.x1,38);assert(room.x1<=38.5-.5);
+  assert(!W.open.some(o=>o.y0===4&&o.x0<=38.25&&o.x1>=38.25&&o.z0<35&&o.z1>34),'The corridor must not cut the outside stairwell wall');
+});
+test('hospital frames span the wall thickness while the moving leaf remains thin',async()=>{
+  const {F}=await worldHarness();for(const d of F.doors){d.fixedFrame.updateMatrixWorld(true);const frame=new T.Box3().setFromObject(d.fixedFrame),alongZ=d.x1-d.x0<d.z1-d.z0,depth=alongZ?frame.max.x-frame.min.x:frame.max.z-frame.min.z;
+    assert(depth>=Math.min(d.x1-d.x0,d.z1-d.z0)+.05,'Frame must project beyond both wall faces');assert(d.mesh.children.every(m=>m.scale.z===.24),'Only the stationary frame should span the jamb');}
+});
+test('stair handrails have closed ends, outward faces and actual texture coordinates',()=>{
+  const {A}=harness(),B=A.facBuilder();A.facBeam(B,[1,4,1],[1,6,4],.055,'paint',[.5,.5,.5,.4]);const chunks=[...B.acc.values()];assert.equal(chunks.reduce((n,a)=>n+a.idx.length,0),36);assert(chunks.some(a=>new Set(a.u.map(x=>x.toFixed(4))).size>2));
+  for(const a of chunks)for(let i=0;i<a.idx.length;i+=3){const p=a.idx.slice(i,i+3).map(n=>new T.Vector3().fromArray(a.p,n*3)),normal=new T.Vector3().subVectors(p[1],p[0]).cross(new T.Vector3().subVectors(p[2],p[0])).normalize(),authored=new T.Vector3().fromArray(a.n,a.idx[i]*3);assert(normal.dot(authored)>.99);}
+});
+test('phone creature materials keep skinning and alpha but avoid fragment PBR lighting',()=>{
+  const {ctx}=harness();ctx.matchMedia=()=>({matches:true});const map=new T.Texture(),source=new T.MeshStandardMaterial({map,color:0x978875,transparent:true,opacity:.7,alphaTest:.035,depthWrite:false});const material=ctx.FacilitySpider.material(source,true);
+  assert(material.isMeshLambertMaterial);assert(material.skinning);assert.equal(material.map,map);assert.equal(material.opacity,.7);assert.equal(material.alphaTest,.035);assert.equal(material.depthWrite,false);assert.equal(ctx.FacilitySpider.material(source,true),material,'Shared skins must reuse their material');
+});
+
+
+test('direct pursuit cancels older searches so a stale result cannot pull a creature backward',()=>{
+  const {ctx,A,F}=harness();ctx.facHauntClear=()=>true;const stale={done:false};Object.assign(F.dm,{x:47.75,y:4,z:10,g:new T.Group(),st:'chase',route:stale,path:[0,1]});
+  A.facDmGo(F,47.75,4,13,4.9,1/60);assert.equal(F.dm.route,null);assert.equal(F.dm.path,null);assert(F.dm.z>10);
+  const a={x:47.75,y:4,z:10,g:new T.Group(),route:stale,path:[0,1],radius:.42,height:.78,spider:{}};A.facHauntWalk(F,a,47.75,4,13,4.65,1/60);assert.equal(a.route,null);assert.equal(a.path,null);assert(a.z>10);
 });

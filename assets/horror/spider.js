@@ -6,6 +6,15 @@
   const T=global.THREE;
   let asset=null,pending=null;
   const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+  const mobileMaterials=new WeakMap();
+  function material(source,skinning){
+    if(!global.matchMedia?.('(pointer:coarse)').matches||source.isMeshLambertMaterial)return source;
+    let entry=mobileMaterials.get(source);if(!entry){entry={};mobileMaterials.set(source,entry);}const key=skinning?'skin':'static';if(entry[key])return entry[key];
+    return entry[key]=new T.MeshLambertMaterial({name:source.name,color:source.color,map:source.map,
+      emissive:source.emissive||0x000000,emissiveMap:source.emissiveMap,emissiveIntensity:source.emissiveIntensity??1,
+      alphaMap:source.alphaMap,alphaTest:source.alphaTest,transparent:source.transparent,opacity:source.opacity,
+      side:source.side,depthWrite:source.depthWrite,depthTest:source.depthTest,vertexColors:source.vertexColors,skinning:!!skinning});
+  }
   function poseBounds(root){
     let top=root;while(top.parent)top=top.parent;top.updateMatrixWorld(true);
     const box=new T.Box3(),v=new T.Vector3();
@@ -52,6 +61,7 @@
     root.traverse(o=>{
       if(!o.isMesh)return;
       o.frustumCulled=false;o.castShadow=false;o.receiveShadow=false;
+      o.material=Array.isArray(o.material)?o.material.map(m=>material(m,!!o.isSkinnedMesh)):material(o.material,!!o.isSkinnedMesh);
       for(const m of Array.isArray(o.material)?o.material:[o.material]){
         m.skinning=!!o.isSkinnedMesh;m.side=T.DoubleSide;
         if(m.emissive){m.emissive.setHex(0x17130d);m.emissiveMap=m.map||null;m.emissiveIntensity=.32;}
@@ -116,5 +126,5 @@
     if(asset&&asset.owner===actor){actor.mixer.uncacheRoot(asset.root);if(asset.visual.parent)asset.visual.parent.remove(asset.visual);asset.owner=null;}
     if(actor.visual.parent)actor.visual.parent.remove(actor.visual);
   }
-  global.FacilitySpider={load,prepare,createActor,reset,tick,release,poseBounds};
+  global.FacilitySpider={load,prepare,createActor,reset,tick,release,poseBounds,material};
 })(typeof window!=='undefined'?window:globalThis);

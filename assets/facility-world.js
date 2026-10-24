@@ -86,27 +86,27 @@
  }
  function prepareDoor(gl){
   gl.scene.updateMatrixWorld(true);const frame=[],leaf=[];gl.scene.traverse(o=>{if(!o.isMesh)return;const g=o.geometry.clone().applyMatrix4(o.matrixWorld);shared(g);const mat=surface(Array.isArray(o.material)?o.material[0]:o.material);mat.side=T.DoubleSide;if(mat.roughness!=null)mat.roughness=.9;mat.emissive?.setHex(0x202e2b);mat.emissiveIntensity=.32;mat.emissiveMap=mat.map||null;(o.name.toLowerCase().includes('glass')?leaf:frame).push({g,mat});});
-  if(!leaf.length||!frame.length)throw Error('Hospital door is missing its frame or moving leaf');const a={frame,leaf};assets.set('hospital-door',a);return a;
+  if(!leaf.length||!frame.length)throw Error('Hospital door is missing its frame or moving leaf');const bounds=new T.Box3();for(const p of frame){p.g.computeBoundingBox();bounds.union(p.g.boundingBox);}const a={frame,leaf,frameDepth:bounds.max.z-bounds.min.z};assets.set('hospital-door',a);return a;
  }
  function door(F,d){
   const a=assets.get('hospital-door');if(!a)return null;const leaf=new T.Group(),fixed=new T.Group(),sx=d.w/1.90194,sy=2.3/3.46359,sz=.24;
   if(!F.doorInstances)F.doorInstances={batches:[],parts:new Map(),matrix:new T.Matrix4(),view:new T.Matrix4(),frustum:new T.Frustum(),sphere:new T.Sphere()};const B=F.doorInstances;
   for(const[src,parent]of[[a.frame,fixed],[a.leaf,leaf]])for(const p of src){
-   let batch=B.parts.get(p);if(!batch){p.g.computeBoundingSphere();const mesh=new T.InstancedMesh(p.g,p.mat,F.W.doors.length);mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);mesh.frustumCulled=false;mesh.count=0;F.scene.add(mesh);batch={mesh,entries:[]};B.parts.set(p,batch);B.batches.push(batch);}
-   const m=new T.Mesh(p.g,p.mat);m.scale.set(sx,sy,sz);m.position.x=d.w/2;m.updateMatrix();m.matrixAutoUpdate=false;m.visible=false;parent.add(m);batch.entries.push({parent,local:m.matrix});
+   let batch=B.parts.get(p);if(!batch){p.g.computeBoundingBox();p.g.computeBoundingSphere();const mesh=new T.InstancedMesh(p.g,p.mat,F.W.doors.length);mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);mesh.frustumCulled=false;mesh.count=0;F.scene.add(mesh);batch={mesh,entries:[],center:p.g.boundingBox.getCenter(new T.Vector3()),half:p.g.boundingBox.getSize(new T.Vector3()).multiplyScalar(.5)};B.parts.set(p,batch);B.batches.push(batch);}
+   const m=new T.Mesh(p.g,p.mat);m.scale.set(sx,sy,parent===fixed?(Math.min(d.x1-d.x0,d.z1-d.z0)+.06)/a.frameDepth:sz);m.position.x=d.w/2;m.updateMatrix();m.matrixAutoUpdate=false;m.visible=false;parent.add(m);batch.entries.push({parent,local:m.matrix});
   }
   leaf.position.set(d.hx,d.y,d.hz);leaf.rotation.y=-d.a0;fixed.position.copy(leaf.position);fixed.rotation.y=leaf.rotation.y;F.scene.add(fixed);d.fixedFrame=fixed;return leaf;
  }
  function syncDoors(F,camera){
   const B=F.doorInstances;if(!B)return;
   const cull=camera&&!F.shadows;if(cull)B.frustum.setFromProjectionMatrix(B.view.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
-  for(const {mesh,entries}of B.batches){let count=0;for(const e of entries)if(e.parent.visible){e.parent.updateMatrix();B.matrix.multiplyMatrices(e.parent.matrix,e.local);if(cull&&!B.frustum.intersectsSphere(B.sphere.copy(mesh.geometry.boundingSphere).applyMatrix4(B.matrix)))continue;mesh.setMatrixAt(count++,B.matrix);}mesh.count=count;mesh.visible=count>0;mesh.castShadow=!!F.shadows;mesh.instanceMatrix.needsUpdate=true;}
+  for(const {mesh,entries,center,half}of B.batches){let count=0;for(const e of entries)if(e.parent.visible){e.parent.updateMatrix();B.matrix.multiplyMatrices(e.parent.matrix,e.local);if(cull){const e=B.matrix.elements;B.sphere.center.copy(center).applyMatrix4(B.matrix);B.sphere.radius=Math.sqrt(half.x*half.x*(e[0]*e[0]+e[1]*e[1]+e[2]*e[2])+half.y*half.y*(e[4]*e[4]+e[5]*e[5]+e[6]*e[6])+half.z*half.z*(e[8]*e[8]+e[9]*e[9]+e[10]*e[10]));if(!B.frustum.intersectsSphere(B.sphere))continue;}mesh.setMatrixAt(count++,B.matrix);}mesh.count=count;mesh.visible=count>0;mesh.castShadow=!!F.shadows;mesh.instanceMatrix.needsUpdate=true;}
  }
  function prepareRunner(gl){
   const root=gl.scene,clip=gl.animations.find(c=>c.duration>.2);if(!clip)throw Error('Outdoor runner has no running animation');
   const mix=new T.AnimationMixer(root),action=mix.clipAction(clip).play(),bounds=new T.Box3();for(let i=0;i<8;i++){mix.setTime(clip.duration*i/8);bounds.union(global.FacilityGhost.poseBounds(root));}mix.stopAllAction();mix.setTime(0);
   const scale=2.16/(bounds.max.y-bounds.min.y),offset=new T.Group(),visual=new T.Group();offset.position.y=-bounds.min.y;offset.add(root);visual.add(offset);visual.scale.setScalar(scale);
-  let anchor;root.traverse(o=>{if(o.isBone&&/hips/i.test(o.name))anchor=o;if(o.isMesh){o.frustumCulled=false;for(const m of Array.isArray(o.material)?o.material:[o.material]){m.skinning=true;m.roughness=.9;m.emissive?.setHex(0x32251f);m.emissiveIntensity=.22;m.emissiveMap=m.map||null;m.needsUpdate=true;}}});
+  let anchor;root.traverse(o=>{if(o.isBone&&/hips/i.test(o.name))anchor=o;if(o.isMesh){o.frustumCulled=false;o.material=Array.isArray(o.material)?o.material.map(m=>global.FacilitySpider.material(m,!!o.isSkinnedMesh)):global.FacilitySpider.material(o.material,!!o.isSkinnedMesh);for(const m of Array.isArray(o.material)?o.material:[o.material]){m.skinning=true;m.roughness=.9;m.emissive?.setHex(0x32251f);m.emissiveIntensity=.22;m.emissiveMap=m.map||null;m.needsUpdate=true;}}});
   const a={root,clip,visual,offset,anchor,scale,owner:null};assets.set('outdoor-runner',a);return a;
  }
  async function load(progress,fetchBuffer){
@@ -123,7 +123,7 @@
    for(const z of[51,64]){door(k,49,z,49.5,z+1.5);door(k,65,z+4,65.5,z+5.5);}
    for(const z of[50,57,64,71])for(const x of[47.75,56,66.75])W.lights.push({k,x,z,ax:'x',col:k===0?'warm':'cyan',dim:.8});
   }
-  room(1,34,29,39,47.5,'SERVICE EXIT CORRIDOR');door(1,35,28.5,36.5,29);door(1,35,47.5,37,48,{outside:true,hinge:true});
+  room(1,34,29,38,47.5,'SERVICE EXIT CORRIDOR');door(1,35,28.5,36.5,29);door(1,35,47.5,37,48,{outside:true,hinge:true});
   W.wingSigns.push({k:1,x:34,z:42,nx:1,nz:0,y:2.2,text:'COURTYARD',sub:'SERVICE EXIT / OUTSIDE',arrow:'right'});
   for(const z of[32,38,44])W.lights.push({k:1,x:36.5,z,ax:'x',col:'warm'});
   for(const r of outsideRects)room(1,...r,'NIGHT COURTYARD',9);
@@ -179,7 +179,7 @@
  }
  function runnerTick(F,dt){
   const a=F.runner;if(!a)return;a.age+=dt;const list=global.facPlayers(F).filter(p=>global.facAlive(p)&&enemyOutside(p));let target=null,best=Infinity;
-  if(!list.length){a.speed=0;a.mode='patrol';a.target=null;a.senseAt=0;return;}
+  if(!list.length){a.speed=0;a.mode='patrol';a.target=null;a.senseAt=0;a.route=null;a.path=null;a.repath=0;return;}
   if(F.t>=(a.senseAt||0)||a.target&&!list.includes(a.target)){
    a.senseAt=F.t+.1;
    for(const p of list){const d=Math.hypot(p.x-a.x,p.z-a.z);if(d<34&&d<best&&global.facSee(F,a.x,a.y+1.6,a.z,p.x,p.y+1.3,p.z,true)){target=p;best=d;}}a.target=target;

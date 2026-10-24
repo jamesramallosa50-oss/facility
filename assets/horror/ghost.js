@@ -35,6 +35,7 @@
     const height=bounds.max.y-bounds.min.y;if(!(height>0&&Number.isFinite(height)))throw new Error('Ghost geometry is invalid');
     root.traverse(o=>{
       if(!o.isMesh)return;o.frustumCulled=false;o.castShadow=false;o.receiveShadow=false;
+      o.material=Array.isArray(o.material)?o.material.map(m=>global.FacilitySpider.material(m,!!o.isSkinnedMesh)):global.FacilitySpider.material(o.material,!!o.isSkinnedMesh);
       for(const m of Array.isArray(o.material)?o.material:[o.material]){
         m.skinning=!!o.isSkinnedMesh;m.side=T.DoubleSide;
         if(m.emissive){m.emissive.setHex(0x19252d);m.emissiveMap=m.map||null;m.emissiveIntensity=.3;}

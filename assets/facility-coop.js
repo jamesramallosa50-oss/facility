@@ -1,6 +1,6 @@
 /* Hosted HTTPS co-op. Only the host simulates the world.
    Guests send movement and interaction requests; snapshots own all shared state. */
-const FNET={version:2,build:'courtyard-r2',prefix:'facility-v1-',hz:12,max:4,timeout:25000};
+const FNET={version:2,build:'chase-r5',prefix:'facility-v1-',hz:12,max:4,timeout:25000};
 function facNetName(v){return String(v||'Survivor').replace(/[^\p{L}\p{N} _-]/gu,'').trim().slice(0,18)||'Survivor';}
 function facNetCode(v){return String(v||'').toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,6);}
 function facNetSend(conn,data,essential=false){
