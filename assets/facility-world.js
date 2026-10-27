@@ -170,7 +170,7 @@
   const moon=new T.Mesh(new T.SphereGeometry(2.2,16,12),new T.MeshBasicMaterial({color:0xcbd9d8,fog:false}));F.scene.add(moon);F.world.moon=moon;F.world.materials.push(moon.material);
   F.world.chunks=batchStatic(props);props.updateMatrixWorld(true);
   for(const mesh of F.world.chunks){mesh.userData.facSphere=mesh.geometry.boundingSphere.clone().applyMatrix4(mesh.matrixWorld);}
-  const cfg=assets.get('outdoor-runner');if(cfg){if(cfg.owner)releaseRunner(cfg.owner);const g=new T.Group();g.add(cfg.visual);F.scene.add(g);const mix=new T.AnimationMixer(cfg.root),action=mix.clipAction(cfg.clip).play();const runner=F.runner={g,mix,action,cfg,x:25,y:4,z:68,face:0,on:true,mode:'patrol',radius:.32,height:2.12,eye:1.7,repath:0,path:null,pi:0,age:0,speed:0,lastSeen:-99,contact:0};cfg.owner=runner;}
+  const cfg=assets.get('outdoor-runner');if(cfg&&!F.explore){if(cfg.owner)releaseRunner(cfg.owner);const g=new T.Group();g.add(cfg.visual);F.scene.add(g);const mix=new T.AnimationMixer(cfg.root),action=mix.clipAction(cfg.clip).play();const runner=F.runner={g,mix,action,cfg,x:25,y:4,z:68,face:0,on:true,mode:'patrol',radius:.32,height:2.12,eye:1.7,repath:0,path:null,pi:0,age:0,speed:0,lastSeen:-99,contact:0};cfg.owner=runner;}
  }
  function runnerAnimation(a,dt,speed){
   if(!a?.mix)return;a.action.paused=speed<.05;a.action.timeScale=clamp(speed/4.6,.7,1.5);a.mix.update(dt);
@@ -209,7 +209,7 @@
   if(F.t>=S.lampAt){S.lampAt=F.t+.25;S.nearLamps=(F.W.streetLights||[]).map(p=>({p,d:Math.hypot(p.x-F.pl.x,p.z-F.pl.z)})).sort((a,b)=>a.d-b.d);}
   const lamps=S.nearLamps||[];
   S.lights.forEach((l,i)=>{const p=lamps[i];l.intensity=p&&p.d<12?1.8*k:0;if(p)l.position.set(p.p.x,8.5,p.p.z);});
-  if(F.runner){const a=F.runner,d=Math.hypot(a.x-F.pl.x,a.z-F.pl.z);a.g.visible=d<45&&Math.abs(a.y-F.pl.y)<3;
+  if(F.runner&&!F.explore){const a=F.runner,d=Math.hypot(a.x-F.pl.x,a.z-F.pl.z);a.g.visible=d<45&&Math.abs(a.y-F.pl.y)<3;
    if(authority)runnerTick(F,dt);a.g.position.set(a.x,a.y,a.z);a.g.rotation.y=a.face;
    if(enemyOutside(F.pl)&&d<18){if(F.t>=(a.fearAt||0)){a.fearAt=F.t+.1;a.fearVisible=global.facSee(F,F.pl.x,F.pl.y+1.4,F.pl.z,a.x,a.y+1.5,a.z,true);}if(a.fearVisible)F.pl.fear=Math.max(F.pl.fear||0,(1-d/18)*.85);}
   }

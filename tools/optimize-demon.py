@@ -26,7 +26,7 @@ def triangles(doc):
                for m in doc['meshes'] for p in m['primitives'])
 
 
-def build(source, dest, gltfpack):
+def build(source, dest, gltfpack, ratio=0.03, error_limit=0.015, texture_limit=1024, max_triangles=30000):
     version = subprocess.check_output([gltfpack, '-v'], text=True).strip()
     if version != 'gltfpack 1.3':
         raise RuntimeError('Use gltfpack 1.3 for the validated derivative')
@@ -35,11 +35,11 @@ def build(source, dest, gltfpack):
     with tempfile.TemporaryDirectory(prefix='facility-hunter-') as temporary:
         intermediate = pathlib.Path(temporary) / 'hunter.glb'
         subprocess.run([gltfpack, '-i', str(source), '-o', str(intermediate),
-                        '-si', '0.03', '-se', '0.015', '-noq', '-kn', '-km',
+                        '-si', str(ratio), '-se', str(error_limit), '-noq', '-kn', '-km',
                         '-ke', '-af', '0', '-ac'], check=True)
         doc, raw = document(intermediate.read_bytes())
-    if triangles(doc) > 30000:
-        raise RuntimeError('Hunter exceeds the 30,000-triangle runtime budget')
+    if triangles(doc) > max_triangles:
+        raise RuntimeError(f'Hunter exceeds the {max_triangles:,}-triangle runtime budget')
     if len(doc['skins'][0]['joints']) != len(original_doc['skins'][0]['joints']):
         raise RuntimeError('The native skeleton must survive simplification')
     images = {im['bufferView']: im for im in doc.get('images', [])}
@@ -49,7 +49,7 @@ def build(source, dest, gltfpack):
         data = raw[start:start + view['byteLength']]
         if i in images:
             image = Image.open(io.BytesIO(data)).convert('RGB')
-            image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+            image.thumbnail((texture_limit, texture_limit), Image.Resampling.LANCZOS)
             encoded = io.BytesIO()
             image.save(encoded, format='JPEG', quality=88, optimize=True)
             data = encoded.getvalue()
@@ -66,7 +66,7 @@ def build(source, dest, gltfpack):
     doc['asset'].setdefault('extras', {})['facility_optimization'] = {
         'tool': version, 'source_sha256': hashlib.sha256(original).hexdigest(),
         'source_triangles': triangles(original_doc), 'runtime_triangles': triangles(doc),
-        'ratio': 0.03, 'error_limit': 0.015, 'texture_limit': 1024,
+        'ratio': ratio, 'error_limit': error_limit, 'texture_limit': texture_limit,
         'changes': 'Simplified skinned geometry; native joints, named nodes and animation retained. Texture encoded as JPEG.'}
     text = json.dumps(doc, separators=(',', ':')).encode()
     text += b' ' * ((-len(text)) % 4)
@@ -84,7 +84,11 @@ if __name__ == '__main__':
     parser.add_argument('--gltfpack', default=shutil.which('gltfpack'))
     parser.add_argument('--source', type=pathlib.Path, default=pathlib.Path('assets/horror/demon.glb'))
     parser.add_argument('--dest', type=pathlib.Path, default=pathlib.Path('assets/horror/demon-runtime.glb'))
+    parser.add_argument('--ratio', type=float, default=0.03)
+    parser.add_argument('--error-limit', type=float, default=0.015)
+    parser.add_argument('--texture-limit', type=int, default=1024)
+    parser.add_argument('--max-triangles', type=int, default=30000)
     args = parser.parse_args()
     if not args.gltfpack:
         parser.error('Provide --gltfpack pointing to gltfpack 1.3')
-    build(args.source, args.dest, args.gltfpack)
+    build(args.source, args.dest, args.gltfpack, args.ratio, args.error_limit, args.texture_limit, args.max_triangles)

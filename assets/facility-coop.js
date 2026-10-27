@@ -1,6 +1,6 @@
 /* Hosted HTTPS co-op. Only the host simulates the world.
    Guests send movement and interaction requests; snapshots own all shared state. */
-const FNET={version:2,build:'chase-r5',prefix:'facility-v1-',hz:12,max:4,timeout:25000};
+const FNET={version:2,build:'explore-r6',prefix:'facility-v1-',hz:12,max:4,timeout:25000};
 function facNetName(v){return String(v||'Survivor').replace(/[^\p{L}\p{N} _-]/gu,'').trim().slice(0,18)||'Survivor';}
 function facNetCode(v){return String(v||'').toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,6);}
 function facNetSend(conn,data,essential=false){
@@ -13,7 +13,9 @@ function facNetRandom(F){
   return()=>{s+=0x6D2B79F5;let t=Math.imul(s^s>>>15,1|s);t^=t+Math.imul(t^t>>>7,61|t);return((t^t>>>14)>>>0)/4294967296;};
 }
 function facCoopConfig(F){
-  const q=new URLSearchParams(location.search),mode=q.get('coop');if(mode!=='host'&&mode!=='join')return;
+  const q=new URLSearchParams(location.search),mode=q.get('coop');
+  F.explore=mode!=='join'&&q.get('mode')==='explore';
+  if(mode!=='host'&&mode!=='join')return;
   const room=facNetCode(q.get('room'));
   F.coop={host:mode==='host',room,name:facNetName(q.get('name')),id:'local',players:new Map(),connections:new Map(),avatars:new Map(),ready:false,
     status:'Connecting to room…',seq:0,ack:0,actions:[],sendAt:0,worldAt:0,lastWorld:performance.now(),received:false,closed:false,outcome:'',epoch:0};
@@ -24,7 +26,11 @@ function facNetScreen(F,message,error=false){
   if(!e){
     e=document.createElement('div');e.id='fc-network';e.innerHTML='<div class="fc-card"><p>THE FACILITY / CO-OP</p><h2 id="fc-heading">Connecting</h2><p id="fc-message"></p><p id="fc-room"></p><button id="fc-reconnect" hidden>RECONNECT</button><button id="fc-exit">BACK TO MENU</button></div>';document.body.appendChild(e);
     e.querySelector('#fc-exit').onclick=()=>{facCoopDispose(F);try{parent.location.href=new URL('index.html',location.href).href;}catch(_){location.href='index.html';}};
-    e.querySelector('#fc-reconnect').onclick=()=>{if(F.coop.relay?.token){F.coop.relay.retry();}else facCoopStart(F);};
+    e.querySelector('#fc-reconnect').onclick=()=>{
+      const C=F.coop;
+      if(C.relay?.token&&!C.seatExpired)C.relay.retry();
+      else{if(C.relay)C.relay.destroy();C.relay=null;C.connection=null;C.received=false;C.actions=[];C.seatExpired=false;facCoopStart(F);}
+    };
   }
   e.hidden=!message;if(!message)return;
   document.getElementById('fc-heading').textContent=error?'Connection interrupted':'Connecting to your team';
@@ -44,7 +50,7 @@ async function facCoopStart(F){
   try{
     const relay=C.relay=C.peer=new window.FacilityRelay({host:C.host,code:C.room,name:C.name,
       onOpen:r=>{
-        C.room=r.code;C.id=r.id;F.pl.netId=r.id;C.status=C.host?'Room open · share this code':'Connected · waiting for world state';
+        C.room=r.code;C.id=r.id;C.seatExpired=false;F.pl.netId=r.id;C.status=C.host?'Room open · share this code':'Connected · waiting for world state';
         if(C.host){C.ready=true;C.error='';clearTimeout(C.timer);facNetScreen(F,'');}
       },
       onConnection:conn=>facNetAttach(F,conn),
@@ -54,6 +60,7 @@ async function facCoopStart(F){
       },
       onError:(message,fatal)=>{
         if(C.closed)return;
+        if(fatal)C.seatExpired=true;
         C.status='Network delay · retrying';
         if(fatal||Date.now()-(C.relay?.lastSuccess||Date.now())>20000)facNetFail(F,message);
       }});
@@ -61,7 +68,7 @@ async function facCoopStart(F){
   }catch(error){facNetFail(F,error.message||'The hosted room could not connect. Retry in a moment.');}
 }
 function facNetAttach(F,conn){
-  const C=F.coop;let accepted=false,pending;
+  const C=F.coop;let accepted=false,verified=false,pending,handshake;
   if(C.host){
     const m=conn.metadata||{},full=C.connections.size>=FNET.max-1,reason=C.outcome?'This run has finished. Ask the host to start a new room.':
       m.version!==FNET.version||m.build!==FNET.build?'Game versions differ. Both players should reload the page.':full?'Room full. A room holds four players.':'';
@@ -76,16 +83,22 @@ function facNetAttach(F,conn){
       const p={...facNetPose(F.pl),hp:100,downed:false,netId:conn.peer,name:facNetName(conn.metadata?.name),loading:true,seen:performance.now(),lastHit:-99,invulnUntil:F.t+3,ack:0};
       const s=F.W.start;Object.assign(p,facNetSpawn(F),{yaw:s.yaw});C.players.set(conn.peer,p);
       facNetSend(conn,{type:'world',...facNetSnapshot(F),welcome:conn.peer},true);C.status='Team connected';
-    }else C.status='Connected · synchronizing the Facility…';
+      handshake=setTimeout(()=>{if(!verified&&conn.open)facNetSend(conn,{type:'reject',reason:'Game versions differ. Everyone should reload and join again.'},true);},7000);
+    }else{C.status='Connected · synchronizing the Facility…';facNetSend(conn,{type:'hello',version:FNET.version,build:FNET.build},true);}
   });
   conn.on('data',data=>{
     if(!accepted||C.closed||!data||typeof data!=='object')return;
-    if(C.host){if(data.type==='input')facNetInput(F,conn,data);}
+    if(C.host){
+      if(data.type==='hello'||data.type==='input'){
+        if(data.version!==FNET.version||data.build!==FNET.build){facNetSend(conn,{type:'reject',reason:'Game versions differ. Everyone should reload and join again.'},true);return;}
+        verified=true;clearTimeout(handshake);if(data.type==='input')facNetInput(F,conn,data);
+      }
+    }
     else if(data.type==='world')facNetWorld(F,data);
     else if(data.type==='reject')facNetFail(F,String(data.reason||'The room rejected this connection.').slice(0,160));
   });
   const close=()=>{
-    clearTimeout(pending);
+    clearTimeout(pending);clearTimeout(handshake);
     if(C.closed)return;
     if(C.host){if(C.connections.get(conn.peer)===conn){C.connections.delete(conn.peer);C.players.delete(conn.peer);facNetRemoveAvatar(F,conn.peer);C.status='A teammate left · room still open';}}
     else facNetFail(F,'The host disconnected. Ask them to reopen a room, then join with the new code.');
@@ -157,7 +170,7 @@ function facCoopDoor(F,d){
 }
 function facNetSnapshot(F){
   const C=F.coop,dm=F.dm,a=F.haunt?.active,q=facNetRound;
-  return{version:FNET.version,build:FNET.build,room:C.room,epoch:C.epoch,t:q(F.t),stage:F.stage,held:F.held,fuses:F.fuses,breaker:F.brk.n,powerT:q(F.powerT||0),
+  return{version:FNET.version,build:FNET.build,room:C.room,mode:F.explore?'explore':'survival',epoch:C.epoch,t:q(F.t),stage:F.stage,held:F.held,fuses:F.fuses,breaker:F.brk.n,powerT:q(F.powerT||0),
     lift:{open:q(F.lift.open),want:F.lift.want,arrive:q(F.lift.arrive)},power:q(F.U.uPow.value),emergency:q(F.U.uEmg.value),outcome:C.outcome,
     players:[{...facNetPose(F.pl),id:C.id,name:C.name,hp:q(F.pl.hp),downed:F.pl.downed,hit:F.pl.hit||0,ack:0,loading:false},
       ...[...C.players.values()].map(p=>({...facNetPose(p),id:p.netId,name:p.name,hp:q(p.hp),downed:p.downed,hit:p.hit||0,ack:p.ack,batteryPicks:p.batteryPicks||0,loading:p.loading,offline:!!p.offline}))],
@@ -168,7 +181,9 @@ function facNetSnapshot(F){
 }
 function facNetWorld(F,m){
   const C=F.coop;
-  if(m.version!==FNET.version||m.build!==FNET.build||m.room!==C.room||!Number.isFinite(m.t)||!Array.isArray(m.players)||m.players.length>4||!Array.isArray(m.doors)||m.doors.length!==F.doors.length)return;
+  if(m.room!==C.room)return;
+  if(m.version!==FNET.version||m.build!==FNET.build){facNetFail(F,'Game versions differ. Everyone should reload and join again.');return;}
+  if(!Number.isFinite(m.t)||!Array.isArray(m.players)||m.players.length>4||!Array.isArray(m.doors)||m.doors.length!==F.doors.length)return;
   const own=m.players.find(p=>p.id===C.id);if(!own||!facNetValidPose(own))return;
   const first=!C.received;C.received=true;C.ready=true;C.error='';C.lastWorld=performance.now();C.status='ONLINE · '+Math.round(C.ping||0)+' ms';clearTimeout(C.timer);facNetScreen(F,'');
   C.world=m;C.outcome=m.outcome||'';F.t=m.t;HZ.t=F.t;
@@ -178,6 +193,7 @@ function facNetWorld(F,m){
   m.doors.forEach((d,i)=>{const door=F.doors[i];door.th=d[0];door.tgt=d[1];door.lock=d[2];door.mesh.rotation.y=-(door.a0+door.th);});
   const items=(data,list,fuse)=>{if(!Array.isArray(data))return;data.forEach((v,i)=>{const item=list[i];if(!item||!v.slice(0,3).every(Number.isFinite))return;[item.x,item.y,item.z,item.got]=v;item.m.position.set(item.x,item.y+(fuse?.04:.045),item.z);item.m.visible=!item.got;if(item.gl){item.gl.position.copy(item.m.position);item.gl.visible=!item.got;}});};
   items(m.fuseItems,F.fz,true);items(m.batteries,F.bats,false);
+  facExploreApply(F,m.mode==='explore');
   const wasDown=F.pl.downed,hit=F.pl.hit||0;
   if(first||wasDown&&!own.downed||Math.hypot(F.pl.x-own.x,F.pl.z-own.z)>3){Object.assign(F.pl,facNetPose(own));F.pl.vx=F.pl.vz=0;F.camY=own.y+FAC.eye;}
   F.pl.hp=own.hp;F.pl.downed=own.downed;F.pl.hit=own.hit;
@@ -234,9 +250,11 @@ function facCoopTick(F,dt){
   if(C.ready&&!C.host&&now-C.lastWorld>20000)facNetFail(F,'The host stopped responding. Reconnect once their game is active again.');
   if(!C.ready){facNetScreen(F,C.error||(C.host?'Creating your room…':'Waiting for the host to synchronize the Facility…'),!!C.error);return false;}
   if(C.host){
-    for(const p of C.players.values()){p.offline=now-p.seen>10000;if(now-p.seen>30000){C.connections.get(p.netId)?.close();}}
+    // Temporary input gaps must not close a relay link while its room seat is
+    // still present. The relay closes it when the service removes the member.
+    for(const p of C.players.values())p.offline=now-p.seen>10000;
     if(now>=C.sendAt){C.sendAt=now+1000/FNET.hz;let data;for(const conn of C.connections.values())if(conn.open){data=data||{type:'world',...facNetSnapshot(F)};facNetSend(conn,data);}}
-  }else if(now>=C.sendAt){C.sendAt=now+1000/FNET.hz;facNetSend(C.connection,{type:'input',version:FNET.version,pose:facNetPose(F.pl),actions:C.actions});}
+  }else if(now>=C.sendAt){C.sendAt=now+1000/FNET.hz;facNetSend(C.connection,{type:'input',version:FNET.version,build:FNET.build,pose:facNetPose(F.pl),actions:C.actions});}
   facNetVisuals(F,dt);
   if(C.outcome&&!HZ.dead&&!HZ.won){if(C.outcome==='won')facWin(F);else facDie(F);}
   return true;
@@ -249,7 +267,7 @@ function facCoopHud(F){
       const u=new URL('index.html',location.href);u.searchParams.set('room',C.room);
       try{await navigator.clipboard.writeText(u.href);C.status='Invite link copied';}catch(_){C.status='Share room code '+C.room;}
     };}
-  document.getElementById('fc-code').textContent='ROOM '+C.room;
+  document.getElementById('fc-code').textContent='ROOM '+C.room+(F.explore?' · EXPLORE':'');
   document.getElementById('fc-status').textContent=C.status+' · '+(C.players.size+1)+'/4';
   const roster=document.getElementById('fc-roster');roster.replaceChildren();
   for(const p of [{...F.pl,name:C.name+' (you)'},...C.players.values()]){

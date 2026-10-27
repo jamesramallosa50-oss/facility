@@ -3,7 +3,7 @@
 (function(global){
  'use strict';
  class Link{
-  constructor(relay,slot){this.relay=relay;this.slot=slot;this.peer='p'+slot;this.open=true;this.bufferSize=0;this.handlers={};this.metadata={version:2,build:'chase-r5',name:relay.members.find(m=>m.slot===slot)?.name||'Survivor'};}
+  constructor(relay,slot){this.relay=relay;this.slot=slot;this.peer='p'+slot;this.open=true;this.bufferSize=0;this.handlers={};this.metadata={version:2,build:'explore-r6',name:relay.members.find(m=>m.slot===slot)?.name||'Survivor'};}
   on(event,fn){(this.handlers[event]||(this.handlers[event]=[])).push(fn);return this;}
   emit(event,data){for(const f of this.handlers[event]||[])f(data);}
   send(data){this.relay.enqueue(this.slot,data);}

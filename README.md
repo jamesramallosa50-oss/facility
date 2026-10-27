@@ -2,9 +2,13 @@
 
 [Play The Facility](https://facility-g5iq.vercel.app/)
 
-Search three floors, collect one fuse per floor, power the basement breaker and reach the freight lift. Play solo or create a hosted room for up to four people.
+Play Survival to search three floors, collect one fuse per floor, power the breaker and reach the freight lift. Or choose Explore to visit the entire facility, courtyard and Backrooms without monsters. Both modes support solo play and hosted co-op for up to four people.
 
 ## This build
+
+- A north-up minimap shows the current floor, nearby teammates, stairs and remaining fuse or breaker locations. Tap it (or press **M**) for the full floor plan; use the floor buttons to inspect other levels. The full map pauses a solo run while a co-op room continues.
+- **EXPLORE SOLO** removes all encounters, unlocks the doors and opens the lift. For multiplayer, select **EXPLORE** when creating a co-op room; guests automatically enter the host's mode. There are no fuse objectives in Explore.
+- A room seat is no longer disconnected merely because input paused temporarily. Expired seats can be joined again, and version differences show an explicit reload message.
 
 - The world is **124 × 102 metres**. Six new annex rooms are 15.5 × 11.5 metres, with longer corridors and return routes on all three floors.
 - A service exit connects the original building to a night courtyard with roads, marked lanes, pavements, street lights, trees and benches. The uploaded garage, store and office sit in the outdoor area. A road connects to the uploaded full Backrooms maze.
@@ -17,6 +21,10 @@ The six new models total about **12.8 MB**, down from about **97.5 MB** of sourc
 
 ## Mobile performance
 
+On touch devices the hunter now uses a 16,662-triangle, 512px-texture derivative of the same rig and animation (the desktop derivative has 25,748 triangles and a 1024px texture). Its skeletal animation updates at up to 30 Hz on phones; movement and contact remain frame-based. Auto graphics can reduce the rendering resolution to 288 lines under sustained load.
+
+Dynamic lighting probes for moving actors now examine at most eight local light sources instead of rebaking six surface directions and repeating the same visibility rays. In the 827-point Node map fixture, visibility rays fell from 126,934 to 6,603 and average probe CPU time fell from about 0.34ms to 0.05ms per new cell. These are CPU fixture measurements, not measurements of phone frame rate; the final experience still needs a physical-device playtest.
+
 Chase routing uses an indexed heap backed by reusable typed arrays. Disconnected floor pockets fail immediately. Long routes yield between frames; all creatures share a cap of 256 expanded nodes and about 2ms of planning work per simulation frame, checked every 16 nodes. Existing routes continue while replacements are planned, and moving goals do not restart unfinished searches. Door collision/visibility tests reject distant leaves before computing their segments. This addresses route-search stalls that remained after the hunter mesh reduction. In the Node fixture, a nearby target behind an inaccessible stairwell pocket previously triggered individual 20–25ms full-map searches; the connected-component check now rejects it without expanding nodes. These are CPU workload measurements, not phone FPS.
 
 The service corridor now stops at x=38, preserving the half-metre wall beside the switchback stairwell. Hospital frames span both faces of their actual wall instead of sitting inside it. Sloped stair rails have closed ends and projected texture coordinates. Creature skins use textured Lambert lighting on touch devices, retaining native skeletons, animation and alpha masks while avoiding per-fragment PBR work during close encounters. Co-op build identifiers change with this map revision so both players use the same collision layout.
@@ -27,7 +35,7 @@ Ghost root-motion correction now updates only its rig and ancestors, rather than
 
 To rebuild the hunter, use `python tools/optimize-demon.py --gltfpack /path/to/gltfpack` with [gltfpack 1.3](https://github.com/zeux/meshoptimizer/tree/v1.3) and Pillow. Simplification runs during asset preparation, never in the game. Tests load the original and optimized skins with the bundled loader, compare joint transforms across five animation times, enforce the runtime geometry budget, and check that ghost animation does not visit unrelated scenery.
 
-Auto graphics on touch devices starts at 480 render lines, adapts down to 360 under load, and skips the four-sample offscreen buffer and flashlight shadow pass. Explicit High/Ultra settings can still enable shadows. Uploaded scenery and hospital doors use vertex-lit textured materials on phones; the courtyard uses one nearby dynamic lamp rather than three. Desktop lighting remains available.
+Auto graphics on touch devices starts at 480 render lines, adapts down to 288 under sustained load, and skips the four-sample offscreen buffer and flashlight shadow pass. Explicit High/Ultra settings can still enable shadows. Uploaded scenery and hospital doors use vertex-lit textured materials on phones; the courtyard uses one nearby dynamic lamp rather than three. Desktop lighting remains available.
 
 Static scenery merges by material and 12-metre area. Native hospital frames and moving leaves share instanced draw batches; their original geometry, hinge transforms and collisions remain intact. Batches contain only nearby, visible door instances, while shadow-enabled views retain their shadow casters. Distant scenery is checked at a fixed cadence.
 
@@ -39,7 +47,7 @@ In the Node scene fixture, the added environments/courtyard/doors use **182 draw
 
 ## Online rooms
 
-Choose **PLAY CO-OP → CREATE A ROOM**, wait for the code in the HUD, then use **INVITE** or share the six-character code. Friends choose **JOIN ROOM**. The host must keep the game tab active.
+Choose **PLAY CO-OP**, select **SURVIVAL** or **EXPLORE**, choose **CREATE A ROOM**, wait for the code in the HUD, then use **INVITE** or share the six-character code. Friends choose **JOIN ROOM**. The host must keep the game tab active.
 
 Co-op uses same-origin HTTPS requests to `/api/facility-room`, which relays packets through the owner's existing hosted four-seat room service. It does not need WebRTC negotiation, open peer-to-peer ports, a camera or a microphone. Room seat tokens stay in memory and are verified by the room service. The API checks request origin and packet size, limits message batches and disables caching. The upstream URL can be replaced with the `FACILITY_ROOM_SERVICE` environment variable; no account credentials are embedded in browser code.
 
@@ -56,7 +64,7 @@ At zero health in co-op, you are downed. A teammate can press **E / USE** within
 - **WASD / joystick:** walk. Pushing the joystick fully forward always walks.
 - **Shift / SPRINT:** run. Sprint reserve is 30 seconds; recovery starts after 0.35 seconds.
 - **E / USE:** doors, items, breaker, nearby teammate revive.
-- **F / LIGHT:** flashlight. **C / CROUCH:** move quietly.
+- **F / LIGHT:** flashlight. **C / CROUCH:** move quietly. **M / tap minimap:** open the floor map.
 
 The freight lift arrives 24 seconds after all three fuses are installed. Close doors, use cover and follow the signs to escape a chase.
 
@@ -64,8 +72,8 @@ The freight lift arrives 24 seconds after all three fuses are installed. Close d
 
 Deploy the repository to Vercel to serve the game and the Node.js function in `api/facility-room.js`. Solo play also works with a local static server, for example `python -m http.server 8000` and `http://localhost:8000/`. A static server alone cannot execute the multiplayer API.
 
-Run `node --test tests/facility-regression.test.cjs` (67 checks). Coverage includes source parsing, geometry, routes, physical door sweeps, native hospital frames/hinges, joystick and stamina behavior, uploaded creature rigs, pursuit/cover rules, health and revives, four-client hosted room packets, transient request recovery, late joins, API boundaries, extension/Backrooms reachability and native outdoor running animation, instanced door transforms/view culling, mobile render buffers/materials, static batching, AI cadence/sleeping, compact packets, empty-room snapshots and model-cache migration.
+Run `node --test tests/facility-regression.test.cjs` (77 checks). Coverage includes source parsing, geometry, routes, physical door sweeps, native hospital frames/hinges, joystick and stamina behavior, uploaded creature rigs, pursuit/cover rules, health and revives, four-client hosted room packets, transient request recovery, late joins, API boundaries, extension/Backrooms reachability and native outdoor running animation, instanced door transforms/view culling, mobile render buffers/materials, static batching, AI cadence/sleeping, compact packets, empty-room snapshots and model-cache migration.
 
 A real hosted-service test also connected four distinct clients, delivered shared world messages to all three guests and rejected a fifth. Browser rendering, actual touch controls and a simultaneous physical-device play session still need playtesting.
 
-The active build is `chase-r5-20261024`. Both entry HTML files and `game-core.html` load this build. The service worker bypasses `/api/` entirely and uses network-first caching for gameplay scripts. Attribution is in [CREDITS.md](CREDITS.md).
+The active build is `explore-r6-20261027`. Both entry HTML files and `game-core.html` load this build. The service worker bypasses `/api/` entirely and uses network-first caching for gameplay scripts. Attribution is in [CREDITS.md](CREDITS.md).

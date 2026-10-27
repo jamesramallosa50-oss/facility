@@ -54,7 +54,7 @@ function harness(buildGeometry=false){
 }
 const shared=harness(true);
 test('every inline script parses, including launch entry points',()=>{
-  for(const file of ['facility-navigation.js','facility-survival.js','facility-coop.js','facility-menu.js','facility-world.js','facility-relay.js'])new vm.Script(fs.readFileSync(path.join(root,'assets',file),'utf8'),{filename:file});
+  for(const file of ['facility-navigation.js','facility-survival.js','facility-coop.js','facility-menu.js','facility-world.js','facility-relay.js','facility-map.js'])new vm.Script(fs.readFileSync(path.join(root,'assets',file),'utf8'),{filename:file});
   for(const [name,code] of [['spider',spiderRuntime],['ghost',ghostRuntime],['signs',signRuntime]])new vm.Script(code,{filename:'assets/horror/'+name+'.js'});
   for(const file of ['game-core.html','game.html','index.html']){
     const h=fs.readFileSync(path.join(root,file),'utf8');
@@ -411,7 +411,7 @@ test('room parameters survive the game loader and asset updates invalidate old g
   const script=[...fs.readFileSync(path.join(root,'game.html'),'utf8').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)][0][1];
   vm.runInNewContext(script,{URL,location,document:{getElementById:()=>link}});const u=new URL(location.redirect);
   assert.equal(u.searchParams.get('room'),'ABC234');assert.equal(u.searchParams.get('coop'),'join');assert.equal(u.searchParams.get('name'),'Kai');assert.equal(u.searchParams.get('facility'),'1');
-  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-chase-r5-20261024'));assert(!sw.includes("pathname.includes('/assets/')"));
+  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-explore-r6-20261027'));assert(!sw.includes("pathname.includes('/assets/')"));
   const code=fs.readFileSync(path.join(root,'index.html'),'utf8');assert(code.includes('PLAY CO-OP'));assert(code.includes('facility-menu.js'));assert(html.includes('assets/facility-coop.js'));
 });
 
@@ -469,6 +469,8 @@ test('hosted rooms connect four clients, relay snapshots, recover a dropped requ
   await guests[0].F.coop.relay.poll();await host.F.coop.relay.poll();await flush();assert.equal(host.F.fuses,1);
   host.F.coop.sendAt=0;host.A.facCoopTick(host.F,.05);await host.F.coop.relay.poll();
   for(const g of guests){await g.F.coop.relay.poll();await flush();assert.equal(g.F.fuses,1);assert.equal(g.F.coop.players.size,3);}
+  host.ctx.facExploreApply(host.F,true);host.F.coop.sendAt=0;host.A.facCoopTick(host.F,.05);await host.F.coop.relay.poll();
+  for(const g of guests){await g.F.coop.relay.poll();await flush();assert(g.F.explore,'Every joining player follows the host mode');assert(g.F.lift.box.off);assert.equal(g.F.dm.on,false);}
   const relay=guests[0].F.coop.relay,oldFetch=guests[0].ctx.fetch;guests[0].ctx.fetch=async()=>{throw Error('temporary offline');};await relay.poll();assert.equal(relay.failures,1);guests[0].ctx.fetch=oldFetch;await relay.poll();assert.equal(relay.failures,0);
   const fifth=coopWorld(harness(),'join');fifth.ctx.fetch=api;fifth.ctx.navigator={sendBeacon(){}};fifth.ctx.Blob=Blob;vm.runInContext(fs.readFileSync(path.join(root,'assets/facility-relay.js'),'utf8'),fifth.ctx);all.push(fifth);fifth.F.coop.room=host.F.coop.room;await fifth.A.facCoopStart(fifth.F);assert.match(fifth.F.coop.error,/full/i);
   assert.equal(host.F.coop.players.size,3);assert(host.F.coop.avatars.size>0,'A connected player must create a visible teammate body');
@@ -581,7 +583,7 @@ test('mobile rendering avoids multisample buffers and starts at a bounded resolu
   vm.runInContext(section('function facPost(){','/* ---------- your hand and flashlight:')+section('function facSize(F){','function facTick(dt){'),ctx);
   const post=ctx.facPost();assert(!post.rt.isWebGLMultisampleRenderTarget,'Phones must avoid the four-sample color/depth target');
   F.post=post;ctx.facSize(F);assert.equal(post.h,480);assert.equal(post.w,1080);
-  F.rs=.5;ctx.facSize(F);assert.equal(post.h,360,'Adaptive resolution must retain a readable lower bound');
+  F.rs=.5;ctx.facSize(F);assert.equal(post.h,288,'Auto graphics may reduce resolution on a loaded phone');
   ctx.isTouch=false;const desktop=ctx.facPost();assert.equal(desktop.rt.samples,4,'Desktop antialiasing remains available');post.dispose();desktop.dispose();
 });
 test('static batching preserves transformed triangles, bounds and materials',()=>{
@@ -715,4 +717,104 @@ test('direct pursuit cancels older searches so a stale result cannot pull a crea
   const {ctx,A,F}=harness();ctx.facHauntClear=()=>true;const stale={done:false};Object.assign(F.dm,{x:47.75,y:4,z:10,g:new T.Group(),st:'chase',route:stale,path:[0,1]});
   A.facDmGo(F,47.75,4,13,4.9,1/60);assert.equal(F.dm.route,null);assert.equal(F.dm.path,null);assert(F.dm.z>10);
   const a={x:47.75,y:4,z:10,g:new T.Group(),route:stale,path:[0,1],radius:.42,height:.78,spider:{}};A.facHauntWalk(F,a,47.75,4,13,4.65,1/60);assert.equal(a.route,null);assert.equal(a.path,null);assert(a.z>10);
+});
+
+test('the phone hunter preserves the rig and running pose at a smaller geometry and texture budget',async()=>{
+  const loader=path.join(root,'assets/horror/gltf.js'),desktop=await parseSpider(T,path.join(root,'assets/horror/demon-runtime.glb'),loader),mobile=await parseSpider(T,path.join(root,'assets/horror/demon-mobile.glb'),loader);
+  const meshOf=g=>{let m;g.scene.traverse(o=>{if(o.isSkinnedMesh)m=o;});return m;},a=meshOf(desktop),b=meshOf(mobile);
+  assert(a&&b);assert(b.geometry.index.count<a.geometry.index.count*.7);assert.equal(b.skeleton.bones.length,24);
+  assert.deepEqual(Array.from(b.skeleton.bones,x=>x.name),Array.from(a.skeleton.bones,x=>x.name));
+  assert.equal(mobile.animations[0].tracks.length,desktop.animations[0].tracks.length);
+  const mixers=[new T.AnimationMixer(desktop.scene),new T.AnimationMixer(mobile.scene)];mixers[0].clipAction(desktop.animations[0]).play();mixers[1].clipAction(mobile.animations[0]).play();
+  const bounds=(mesh,scene)=>{scene.updateMatrixWorld(true);mesh.skeleton.update();const box=new T.Box3(),v=new T.Vector3(),p=mesh.geometry.attributes.position;for(let i=0;i<p.count;i++){v.fromBufferAttribute(p,i);mesh.boneTransform(i,v);box.expandByPoint(v.applyMatrix4(mesh.matrixWorld));}return box;};
+  for(const time of [0,.2,.42]){mixers.forEach(m=>m.setTime(time));desktop.scene.updateMatrixWorld(true);mobile.scene.updateMatrixWorld(true);
+    for(let i=0;i<24;i++){const da=a.skeleton.bones[i].matrixWorld.elements,db=b.skeleton.bones[i].matrixWorld.elements;for(let j=0;j<16;j++)assert(Math.abs(da[j]-db[j])<.0002);}
+    const x=bounds(a,desktop.scene),y=bounds(b,mobile.scene),tolerance=x.getSize(new T.Vector3()).length()*.01;assert(x.min.distanceTo(y.min)<tolerance&&x.max.distanceTo(y.max)<tolerance,'Simplification must preserve the animated silhouette');}
+  const bytes=fs.readFileSync(path.join(root,'assets/horror/demon-mobile.glb')),len=bytes.readUInt32LE(12),doc=JSON.parse(bytes.subarray(20,20+len));
+  assert(bytes.length<1000000);assert.equal(doc.asset.extras.facility_optimization.texture_limit,512);
+  assert(html.includes('assets/horror/demon-mobile.glb?v=explore-r6'));
+});
+
+test('dynamic lighting bounds visibility work per new position and caches its result',async()=>{
+  const {ctx,A,W}=await worldHarness();A.facLightsPrep(W);W.PC.clear();const march=ctx.facMarch;let rays=0;
+  ctx.facMarch=(...args)=>{rays++;return march(...args);};
+  for(const [x,z] of [[11,7],[26,7],[37,16],[57,65]]){
+    const before=rays,light=ctx.facProbe(W,x,5.6,z);assert(rays-before<=8,'One moving-object probe must use at most eight visibility rays');
+    assert(light.length===6&&light.every(v=>Number.isFinite(v)&&v>=0));const after=rays;assert.equal(ctx.facProbe(W,x+.05,5.6,z+.05),light);assert.equal(rays,after,'Repeat probes must use their cached cell');
+  }
+  ctx.facMarch=march;
+});
+
+test('explore mode unlocks doors and lift, disables creature encounters and ignores damage',()=>{
+  const {ctx,A,F}=coopWorld(harness());A.facDoorsInit(F,{});F.doors[0].lock=true;
+  F.lift.doors=[{g:new T.Group(),s:-1},{g:new T.Group(),s:1}];F.dm.on=true;F.dm.st='chase';F.dm.g.visible=true;
+  F.runner={on:true,g:new T.Group(),route:{},path:[1]};A.facHauntInit(F);const spider=F.haunt.actors[0];spider.on=true;spider.g.visible=true;F.haunt.active=spider;
+  ctx.facExploreApply(F,true);
+  assert(F.explore);assert(F.doors.every(d=>!d.lock));assert(F.lift.box.off);assert.equal(F.lift.open,1);assert.equal(F.lift.doors[0].g.position.z,22.8);
+  assert.equal(F.dm.on,false);assert.equal(F.dm.g.visible,false);assert.equal(F.haunt.active,null);assert.equal(F.runner.g.visible,false);assert.equal(F.fz[0].m.visible,false);
+  assert.equal(A.facDamage(F,F.pl,28),false);assert.equal(F.pl.hp,100);assert.equal(A.facHauntSpawn(F,'crawler',[11,4,8],'hunt'),false);
+  A.facHauntDispose(F);
+});
+
+test('the host chooses explore and a late-joining co-op guest receives that mode',()=>{
+  const host=coopWorld(harness()),guest=coopWorld(harness(),'join');host.F.coop.id='host';guest.F.coop.id='guest';
+  host.A.facDoorsInit(host.F,{});guest.A.facDoorsInit(guest.F,{});host.F.coop.players.set('guest',{...host.F.pl,netId:'guest',name:'Guest',hp:100,ack:0});
+  host.ctx.facExploreApply(host.F,true);guest.A.facNetWorld(guest.F,host.A.facNetSnapshot(host.F));
+  assert(guest.F.coop.ready&&guest.F.explore);assert(guest.F.lift.box.off);assert(!guest.F.fz[0].m.visible);assert(guest.F.doors.every(d=>!d.lock));
+  const q=coopWorld(harness());q.ctx.location.search='?coop=host&room=ABC234&mode=explore';q.A.facCoopConfig(q.F);assert(q.F.explore);
+  q.ctx.location.search='?coop=join&room=ABC234&mode=explore';q.A.facCoopConfig(q.F);assert.equal(q.F.explore,false,'Joining players wait for the host mode');
+});
+
+test('a short or long input gap keeps the room link so a player can return online',()=>{
+  const {ctx,A,F}=coopWorld(harness());let closed=0,now=31001;ctx.performance={now:()=>now};ctx.facNetVisuals=()=>{};F.coop.ready=true;F.coop.sendAt=Infinity;
+  const p={...F.pl,netId:'guest',name:'Guest',seen:0,ack:0,loading:false};F.coop.players.set('guest',p);F.coop.connections.set('guest',{open:true,close(){closed++;}});
+  A.facCoopTick(F,.05);assert(p.offline);assert.equal(closed,0,'The relay owns seat expiry, not a local input timer');
+  A.facNetInput(F,{peer:'guest'},{version:2,pose:{...p},actions:[]});assert.equal(p.offline,false);assert.equal(p.seen,now);
+});
+
+test('a guest receives a clear error for a different game build',()=>{
+  const host=coopWorld(harness()),guest=coopWorld(harness(),'join');host.F.coop.id='host';guest.F.coop.id='guest';
+  host.F.coop.players.set('guest',{...host.F.pl,netId:'guest',name:'Guest',hp:100,ack:0});
+  const packet=host.A.facNetSnapshot(host.F);packet.build='obsolete';guest.A.facNetWorld(guest.F,packet);
+  assert(!guest.F.coop.ready);assert.match(guest.F.coop.error,/versions differ/i);
+});
+
+test('the minimap uses the real floor geometry and shows remaining objectives',async()=>{
+  const {ctx,F,W}=await worldHarness();vm.runInContext(fs.readFileSync(path.join(root,'assets/facility-map.js'),'utf8'),ctx);
+  const map=ctx.FacilityMap,plan=map.rasterData(W,1),pixel=(x,z)=>plan.rgba[(Math.floor(z/.5)*248+Math.floor(x/.5))*4+3];
+  assert.equal(pixel(11,8),255,'The start room must appear');assert.equal(pixel(0,0),0,'The plan must not invent rooms outside the level');assert.equal(pixel(100,68),255,'The uploaded Backrooms must appear');
+  assert.equal(map.floorOf(8),0);assert.equal(map.floorOf(4),1);assert.equal(map.floorOf(0),2);
+  const old={fz:F.fz,brk:F.brk,stage:F.stage,explore:F.explore};F.fz=[{k:0,x:12,z:10,got:false},{k:1,x:15,z:9,got:false},{k:2,x:16,z:10,got:true}];F.explore=false;F.stage='find';F.brk={k:2,x:35,z:25};
+  assert.equal(map.objective(F),F.fz[1],'Show a fuse on the current floor first');F.fz[1].got=true;assert.equal(map.objective(F),F.fz[0]);F.fz[0].got=true;assert.equal(map.objective(F).label,'BREAKER');F.explore=true;assert.equal(map.objective(F),null);
+  Object.assign(F,old);
+});
+
+test('explore mode does not create the outdoor runner even when the sector is visited',async()=>{
+  const {ctx,F}=await worldHarness();F.explore=true;F.coop=null;Object.assign(F.pl,{x:36,y:4,z:70,hp:100,downed:false});
+  ctx.FacilityWorld.init(F);assert(!F.runner);for(let i=0;i<10;i++){F.t+=.1;ctx.FacilityWorld.tick(F,.1,true);}assert(!F.runner);
+  ctx.FacilityWorld.dispose(F);F.explore=false;
+});
+
+test('minimap opens, changes floors, closes, and removes its keyboard handler',async()=>{
+  const {ctx,F}=await worldHarness(),callbacks=new Map(),elements=[];
+  const canvas=()=>{const context={createImageData(w,h){return{data:new Uint8ClampedArray(w*h*4)};},putImageData(){},clearRect(){},fillRect(){},drawImage(){},beginPath(){},moveTo(){},lineTo(){},closePath(){},arc(){},fill(){},stroke(){},save(){},restore(){},translate(){},rotate(){}};return{width:144,height:104,getContext(){return context;}};};
+  const element=()=>({handlers:{},attrs:{},textContent:'',hidden:false,addEventListener(type,fn){this.handlers[type]=fn;},setAttribute(k,v){this.attrs[k]=v;},remove(){this.removed=true;}});
+  const hud={appendChild(e){elements.push(e);}},mini=element(),screen=element(),floor=element(),target=element(),heading=element(),close=element(),buttons=[element(),element(),element()],small=canvas(),large=canvas();
+  large.width=520;large.height=360;mini.querySelector=s=>s==='canvas'?small:s==='.fm-floor'?floor:target;
+  screen.querySelector=s=>s==='.fm-large'?large:s==='.fm-heading'?heading:close;screen.querySelectorAll=()=>buttons;
+  let count=0;ctx.document={pointerLockElement:null,body:{appendChild(e){elements.push(e);}},getElementById:id=>id==='hzui'?hud:null,createElement:tag=>tag==='canvas'?canvas():count++===0?mini:screen};
+  ctx.addEventListener=(event,fn)=>callbacks.set(event,fn);ctx.removeEventListener=(event,fn)=>{if(callbacks.get(event)===fn)callbacks.delete(event);};
+  vm.runInContext(fs.readFileSync(path.join(root,'assets/facility-map.js'),'utf8'),ctx);F.map=null;F.coop=null;F.explore=false;F.fz=[{k:1,x:15,z:9,got:false}];F.pl.y=4;
+  ctx.FacilityMap.init(F);assert.equal(floor.textContent,'1ST FLOOR');assert.match(target.textContent,/FUSE/);
+  mini.handlers.click();assert(F.map.open&&!screen.hidden);buttons[0].handlers.click();assert.equal(heading.textContent,'2ND FLOOR');assert.equal(buttons[0].attrs['aria-pressed'],'true');
+  close.handlers.click();assert(!F.map.open&&screen.hidden);assert(callbacks.has('keydown'));ctx.FacilityMap.dispose(F);assert(!callbacks.has('keydown'));assert(mini.removed&&screen.removed);
+});
+
+test('menu creates explore rooms and joiners use the host mode',()=>{
+  const controls=Object.fromEntries(['coop-menu','room-code','coop-feedback','coop','coop-close','host-room','join-room','survivor-name','menu','game'].map(id=>[id,{value:'',style:{},close(){},showModal(){},focus(){}}]));
+  controls['survivor-name'].value='Kai';controls['coop-menu'].querySelector=()=>({value:'explore'});
+  const c={URLSearchParams,Uint8Array,document:{getElementById:id=>controls[id]},location:{search:''},crypto:{getRandomValues(a){a.fill(4);}}};
+  vm.runInNewContext(fs.readFileSync(path.join(root,'assets/facility-menu.js'),'utf8'),c);controls['host-room'].onclick();
+  let q=new URLSearchParams(controls.game.src.split('?')[1]);assert.equal(q.get('coop'),'host');assert.equal(q.get('mode'),'explore');assert.equal(q.get('name'),'Kai');assert.equal(q.get('room').length,6);
+  controls['room-code'].value='ABC234';controls['join-room'].onsubmit({preventDefault(){}});q=new URLSearchParams(controls.game.src.split('?')[1]);assert.equal(q.get('coop'),'join');assert.equal(q.get('room'),'ABC234');assert.equal(q.get('mode'),null);
 });

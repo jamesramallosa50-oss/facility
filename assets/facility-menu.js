@@ -1,6 +1,7 @@
 /* Menu entry points preserve the room parameters through both game loaders. */
-function launchFacility(mode,room){
-  const q=new URLSearchParams({v:'chase-r5-20261024'});
+function launchFacility(mode,room,playMode){
+  const q=new URLSearchParams({v:'explore-r6-20261027'});
+  if(playMode==='explore')q.set('mode','explore');
   if(mode){q.set('coop',mode);q.set('room',room);q.set('name',document.getElementById('survivor-name').value.trim().slice(0,18)||'Survivor');}
   document.getElementById('coop-menu').close();
   const menu=document.getElementById('menu'),frame=document.getElementById('game');menu.style.display='none';frame.style.display='block';frame.src='game.html?'+q;frame.focus();
@@ -11,7 +12,8 @@ function launchFacility(mode,room){
   document.getElementById('coop-close').onclick=()=>dialog.close();
   document.getElementById('host-room').onclick=()=>{
     const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',bytes=new Uint8Array(6);crypto.getRandomValues(bytes);
-    launchFacility('host',[...bytes].map(n=>alphabet[n%alphabet.length]).join(''));
+    const selected=dialog.querySelector('input[name="room-mode"]:checked');
+    launchFacility('host',[...bytes].map(n=>alphabet[n%alphabet.length]).join(''),selected?.value);
   };
   document.getElementById('join-room').onsubmit=e=>{
     e.preventDefault();const room=code.value.toUpperCase().replace(/\s/g,'');

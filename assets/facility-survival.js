@@ -5,6 +5,18 @@ function facHealthInit(F){
 }
 function facPlayers(F){return F.coop?[F.pl,...F.coop.players.values()]:[F.pl];}
 function facAuthority(F){return !F.coop||F.coop.host;}
+// The host's mode is authoritative. Explore leaves the level interactive but
+// removes encounters and opens every progression lock, including the lift.
+function facExploreApply(F,enabled){
+  F.explore=!!enabled;
+  if(!F.explore)return;
+  for(const door of F.doors||[])door.lock=false;
+  if(F.dm){F.dm.on=false;F.dm.vis=false;F.dm.st='away';F.dm.route=null;F.dm.path=null;if(F.dm.g)F.dm.g.visible=false;}
+  if(F.haunt?.active)facHauntEnd(F);
+  if(F.runner){F.runner.on=false;F.runner.route=null;F.runner.path=null;if(F.runner.g)F.runner.g.visible=false;}
+  for(const fuse of F.fz||[]){if(fuse.m)fuse.m.visible=false;if(fuse.gl)fuse.gl.visible=false;}
+  if(F.lift){F.lift.open=1;F.lift.want=1;if(F.lift.box)F.lift.box.off=true;for(const d of F.lift.doors||[])d.g.position.z=25+d.s*2.2;}
+}
 function facAlive(p){return !p.downed&&(p.hp==null||p.hp>0)&&!p.loading&&!p.offline;}
 function facHuntTarget(F,actor=F.dm,spider=false){
   // Share one perception result between the hunter, director and haunt logic.
@@ -31,7 +43,7 @@ function facHitFeedback(F,amount){
   facSting(F,.35);facTip(F,'-'+amount+' health · sprint away!',2);
 }
 function facDamage(F,p,amount){
-  if(!facAuthority(F)||!facAlive(p)||F.t<(p.invulnUntil||0)||HZ.dead||HZ.won)return false;
+  if(F.explore||!facAuthority(F)||!facAlive(p)||F.t<(p.invulnUntil||0)||HZ.dead||HZ.won)return false;
   p.hp=Math.max(0,(p.hp==null?100:p.hp)-amount);p.lastHit=F.t;p.invulnUntil=F.t+FHEALTH.invulnerable;
   p.hit=(p.hit||0)+1;
   if(p===F.pl)facHitFeedback(F,amount);

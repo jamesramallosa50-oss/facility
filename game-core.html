@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>The Facility — Night Courtyard</title>
-<meta name="facility-build" content="chase-r5-20261024">
+<meta name="facility-build" content="explore-r6-20261027">
 <meta name="theme-color" content="#060807">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="mobile-web-app-capable" content="yes">
@@ -13218,12 +13218,13 @@ async function hzFetch(url,prog){
 async function hzLoadDemon(prog){
   if(HZA)return HZA;
   await hzScript('assets/horror/gltf.js');
-  const buf=await hzFetch('assets/horror/demon-runtime.glb?v=proximity-r4',prog);
+  const model=isTouch?'assets/horror/demon-mobile.glb?v=explore-r6':'assets/horror/demon-runtime.glb?v=proximity-r4';
+  const buf=await hzFetch(model,prog);
   await MeshoptDecoder.ready;
   const gl=await new Promise((ok,no)=>{const ld=new THREE.GLTFLoader();ld.setMeshoptDecoder(MeshoptDecoder);ld.parse(buf,'',ok,no);});
   const root=gl.scene;let skinned=null;
   root.traverse(o=>{if(o.isSkinnedMesh||o.isMesh){skinned=skinned||o;o.frustumCulled=false;}});
-  /* The 1024px texture is mipmapped, with a bounded sampling cost on phones. */
+  /* The phone and desktop textures are mipmapped with bounded sampling cost. */
   const src=skinned.material,map=src.map;
   if(map){map.encoding=T.LinearEncoding;map.anisotropy=Math.min(isTouch?2:4,renderer.capabilities.getMaxAnisotropy());map.minFilter=T.LinearMipmapLinearFilter;map.magFilter=T.LinearFilter;map.generateMipmaps=true;map.needsUpdate=true;}
   const mat=new T.MeshLambertMaterial({map,skinning:true,side:T.DoubleSide,emissive:0x1a0806,emissiveMap:map});
@@ -13560,7 +13561,7 @@ function hzInputOnce(){
     if(e.code==='KeyC'||e.code==='ControlLeft'){if(HZ.mode==='run')HZ.kSlide=1;else HZ.pl.crouch=!HZ.pl.crouch;}
     if(e.code==='KeyG')HZ.kThrow=1;if(e.code==='KeyR')HZ.kWard=1;
     if(e.code==='KeyE'){if(HZ.mode==='run')HZ.kWard=1;else HZ.kAct=1;}if(e.code==='KeyF')HZ.kLan=1;if(e.code==='KeyQ')HZ.kSen=1;});
-  document.addEventListener('pointerlockchange',()=>{if(state==='horror'&&HZ&&!HZ.dead&&!HZ.paused&&!isTouch&&document.pointerLockElement!==$('view')&&HZ.lockedOnce)hzPause(true);if(document.pointerLockElement===$('view')&&HZ)HZ.lockedOnce=1;});
+  document.addEventListener('pointerlockchange',()=>{if(state==='horror'&&HZ&&!HZ.dead&&!HZ.paused&&!isTouch&&!HZ.fac?.map?.open&&document.pointerLockElement!==$('view')&&HZ.lockedOnce)hzPause(true);if(document.pointerLockElement===$('view')&&HZ)HZ.lockedOnce=1;});
   $('view').addEventListener('click',()=>{if(state==='horror'&&HZ&&!HZ.paused&&!HZ.dead&&!isTouch&&document.pointerLockElement!==$('view'))try{$('view').requestPointerLock();}catch(_){}});
 }
 function hzPause(on){/* 3.14: the climb's own pause screen, with every setting, plus TRY AGAIN */
@@ -13625,7 +13626,7 @@ async function horStart(mode){
   const ld=$('hzload');if(ld)ld.remove();
   HZ.loading=false;HZ.paused=false;P.yaw=HZ.pl.yaw;P.pitch=HZ.mode==='fac'?HZ.pl.pitch:0;P.as=null;padRun=false;try{resetTouch();}catch(_){}hzSkin(true);hzHud(true);
   if(!isTouch)try{$('view').requestPointerLock();}catch(_){}
-  if(HZ.mode==='fac'){facHudInit(HZ.fac);$('view').classList.add('hzfac');hzTip('Find the three fuses · power the freight lift',5);}
+  if(HZ.mode==='fac'){facHudInit(HZ.fac);$('view').classList.add('hzfac');hzTip(HZ.fac.explore?'Explore mode · no monsters. Tap the map to view every floor.':'Find the three fuses · tap the map to locate them',5);}
   else if(HZ.mode==='hide'){hzSay('HIDE',2.2);hzTip('Find 5 relics · it is listening',4);}else{hzSay('RUN',2.2);hzRoar(.6);}
 }
 function hzBuild(){
@@ -14915,9 +14916,26 @@ async function facBake(W,prog){
   if(prog)prog(1);
 }
 /* light at a point for moving things (the creature, your hands): no normal, so half of what a surface facing the light gets */
-function facProbe(W,x,y,z){const key=((z/1)|0)*8192+((x/1)|0)*64+((y/1)|0);let c=W.PC.get(key);if(c)return c;const o=new Float32Array(10);
-  let r=0,g=0,b=0,er=0,eg=0,eb=0;for(const [nx,ny,nz] of[[0,1,0],[0,-1,0],[1,0,0],[-1,0,0],[0,0,1],[0,0,-1]]){facBakeVert(W,(x|0)+.5,(y|0)+.5,(z|0)+.5,nx,ny,nz,(x|0)+.5,(y|0)+.5,(z|0)+.5,o,0);r+=o[0];g+=o[1];b+=o[2];er+=o[3];eg+=o[4];eb+=o[5];}
-  c=[r/3.2,g/3.2,b/3.2,er/3.2,eg/3.2,eb/3.2];W.PC.set(key,c);return c;}
+function facProbe(W,x,y,z){
+  const ix=x|0,iy=y|0,iz=z|0,key=iz*8192+ix*64+iy;let cached=W.PC.get(key);if(cached)return cached;
+  // Dynamic actors only need soft omnidirectional lighting. Check at most the
+  // eight strongest local sources once each instead of rebaking six faces and
+  // casting hundreds of rays every time a moving hunter enters a new cell.
+  const px=ix+.5,py=iy+.5,pz=iz+.5,kd=facKindAt(W,Math.min(FNZ-1,Math.max(0,(pz/FC)|0))*FNX+Math.min(FNX-1,Math.max(0,(px/FC)|0)),py),ambient=FPLA(kd)?FAMB.w:FAMB.c;
+  const result=[ambient[0]*1.65,ambient[1]*1.65,ambient[2]*1.65,0,0,0],best=[];
+  for(const index of W.BLH.get(Math.floor(pz/4)*100+Math.floor(px/4))||[]){
+    const L=W.BL[index],source=L.S[(L.S.length/2)|0],dx=source[0]-px,dy=source[1]-py,dz=source[2]-pz,d2=dx*dx+dy*dy+dz*dz;
+    if(d2>L.R*L.R||Math.abs(dy)>6.5)continue;
+    const d=Math.sqrt(d2)||.001,lx=dx/d,ly=dy/d,lz=dz/d;
+    const emission=L.bounce?Math.max(0,-ly)*.7+.3:L.wall?Math.max(0,-(lx*L.nx+lz*L.nz))*.7+.3:Math.pow(Math.max(0,ly),.85)*.88+.12;
+    const fade=d>L.R*.65?1-(d-L.R*.65)/(L.R*.35):1;
+    const strength=L.I*emission*fade/(1+d2/(L.d0*L.d0))*(Math.abs(lx)+Math.abs(ly)+Math.abs(lz))*(L.red?.98:1.15)/3.2;
+    if(strength<.003)continue;let at=0;while(at<best.length&&best[at].strength>=strength)at++;if(at<8){best.splice(at,0,{L,source,strength});if(best.length>8)best.pop();}
+  }
+  for(const candidate of best){const {L,source,strength}=candidate,visibility=facMarch(W,px,py,pz,source[0],source[1],source[2]);if(!visibility)continue;
+    const i=L.red?3:0,scale=strength*visibility;result[i]+=L.col[0]*scale;result[i+1]+=L.col[1]*scale;result[i+2]+=L.col[2]*scale;}
+  W.PC.set(key,result);return result;
+}
 
 /* ===== BUILD 3.15: THE FACILITY — part 2: textures, materials, the lighting shader and the screen effects =====
    All textures are painted in code when the mode starts: board-formed concrete, yellow plaster over a red dado,
@@ -15586,7 +15604,7 @@ async function facBuild(prog){
   F.pl.isBody=1;F.camY=F.pl.y+FAC.eye;F.fuses=0;F.held=0;F.stage='find';F.startT=0;F.lightT=0;
   facHealthInit(F);
   facAudioInit(F);
-  facDemonInit(F);facHauntInit(F);window.FacilityWorld.init(F);
+  facDemonInit(F);facHauntInit(F);window.FacilityWorld.init(F);facExploreApply(F,F.explore);
   if(F.dmShadow&&F.shadows)HZA.mesh.castShadow=true;
   for(const d of F.lift.doors)d.g.castShadow=!!F.shadows;
   try{renderer.compile(sc,cam);renderer.compile(F.hand.sc,cam);}catch(_){}
@@ -15689,14 +15707,14 @@ function facLook(F){
   let best=null,bs=0;
   const cand=(x,y,z,maxD,minC,o)=>{const vx=x-ex,vy=y-ey,vz=z-ez,d=Math.hypot(vx,vy,vz);if(d>maxD||d<.05)return;const c=(vx*dx+vy*dy+vz*dz)/d;if(c<minC)return;const s=c-d*.02;if(s>bs&&facSee(F,ex,ey,ez,x,y,z,false)){bs=s;best=o;}};
   for(const d of F.doors){if(Math.abs(d.y-pl.y)>2)continue;const sg=facDoorSeg(d),mx=(sg[0]+sg[2])/2,mz=(sg[1]+sg[3])/2;cand(mx,d.y+1.05,mz,2.1,.86,{t:'door',d});if(Math.abs(d.th)>.5)cand(d.cx,d.y+1.05,d.cz,1.8,.9,{t:'door',d});}
-  for(const f of F.fz)if(!f.got)cand(f.x,f.y+.05,f.z,2,.88,{t:'fuse',f});
+  for(const f of F.fz)if(!F.explore&&!f.got)cand(f.x,f.y+.05,f.z,2,.88,{t:'fuse',f});
   for(const b of F.bats)if(!b.got)cand(b.x,b.y+.05,b.z,2,.88,{t:'bat',b});
-  if(F.held>0||F.stage!=='find')cand(F.brk.x,F.brk.y,F.brk.z,2.2,.8,{t:'brk'});
+  if(!F.explore&&(F.held>0||F.stage!=='find'))cand(F.brk.x,F.brk.y,F.brk.z,2.2,.8,{t:'brk'});
   F.aim=best;
   const teammate=facReviveAim(F);if(teammate)F.aim={t:'revive',p:teammate};
 }
 function facUse(F){
-  const a=F.aim,pl=F.pl;if(!a)return;
+  const a=F.aim,pl=F.pl;if(!a||F.explore&&(a.t==='fuse'||a.t==='brk'))return;
   if(facCoopUse(F,a))return;
   if(a.t==='door'){const d=a.d;if(d.lock){facSndRattle(F,d);facTip(F,'Locked',1.2);return;}
     if(Math.abs(d.th)<.6&&Math.abs(d.tgt)<.6){facDoorOpen(F,d,pl.x,pl.z,false);F.lastOpen={d,t:F.t};}
@@ -15895,7 +15913,7 @@ function facDmBody(F,dt,spd){
   dm.g.position.set(dm.x,dm.y,dm.z);dm.g.rotation.y=dm.face;
   const w=spd>.1?1:0;dm.rw+=(w-dm.rw)*Math.min(1,dt*5);dm.run.setEffectiveWeight(dm.rw);dm.idle.setEffectiveWeight(1-dm.rw);dm.run.timeScale=clamp(spd/5.2,.42,1.6);
   /* lean into a sprint */
-  dm.g.rotation.x=0;dm.animDt=(dm.animDt||0)+dt;if(dm.vis||dm.st==='kill'||dm.animDt>=.2){dm.mix.update(dm.animDt);dm.animDt=0;}
+  dm.g.rotation.x=0;dm.animDt=(dm.animDt||0)+dt;const animStep=dm.vis?(typeof isTouch!=='undefined'&&isTouch?1/30:0):.2;if(dm.st==='kill'||dm.animDt>=animStep){dm.mix.update(dm.animDt);dm.animDt=0;}
   if(spd>.1&&dm.on){dm.stp=(dm.stp||0)+dt*spd;if(dm.stp>(spd>3.5?1.5:1.15)){dm.stp=0;facDmStep(F,spd>3.5?1:.5);}}
   if(dm.on&&Math.random()<dt*(dm.st==='chase'?.5:.12))facDmBreath(F);
 }
@@ -16108,15 +16126,16 @@ function facHudInit(F){
     '#fcross{position:fixed;left:50%;top:50%;width:4px;height:4px;margin:-2px;border-radius:50%;background:rgba(255,255,255,.35);transition:transform .15s,background .15s}#fcross.on{transform:scale(1.8);background:rgba(255,230,180,.9)}'+
     '#hzui.fac #hztip{bottom:28%}#hzui.fac #hzkeys{font-size:10px}#hzui.fac.dead .top,#hzui.fac.dead #hzkeys,#hzui.fac.dead #hztip,#hzui.fac.dead #hzmsg,#hzui.fac.dead #fcross,#hzui.fac.dead #hzpz,#hzui.fac.dead #hzsta{visibility:hidden}';document.head.appendChild(st);}
   if(!$('fcross')){const c=document.createElement('div');c.id='fcross';u.appendChild(c);}
+  window.FacilityMap?.init(F);
 }
 function facTip(F,t,s){F.tipUntil=F.t+(s||2);hzTip(t,s||2);}
 function facSay(F,t,s){hzSay(t,s||2);}
 function facHud(F){
-  facHealthHud(F);if(F.t<(F.hudAt||0))return;F.hudAt=F.t+.1;
+  facHealthHud(F);if(F.t<(F.hudAt||0))return;F.hudAt=F.t+.1;window.FacilityMap?.update(F);
   const pl=F.pl,set=(id,v)=>{const e=$(id);if(e&&e.textContent!==v)e.textContent=v;};
   if(F.coop&&F.t>=(F.coop.hudAt||0)){F.coop.hudAt=F.t+.25;facCoopHud(F);}
-  set('hzdist',F.stage==='find'?(F.fuses<3?'FUSES '+F.fuses+' / 3':'BREAKER '+F.brk.n+' / 3'):F.stage==='wait'?'THE LIFT · '+Math.ceil(Math.max(0,F.lift.arrive-F.t))+' s':'GET IN THE LIFT');
-  {const hint=F.stage==='find'?(F.fuses<3?'One fuse per floor. Search both wings; follow the signs. Breaker: basement freight lift.':'Put the fuses in the breaker by the freight lift (basement).'):F.stage==='wait'?'Stay alive.':'The lift is open.';
+  set('hzdist',F.explore?'EXPLORE MODE':F.stage==='find'?(F.fuses<3?'FUSES '+F.fuses+' / 3':'BREAKER '+F.brk.n+' / 3'):F.stage==='wait'?'THE LIFT · '+Math.ceil(Math.max(0,F.lift.arrive-F.t))+' s':'GET IN THE LIFT');
+  {const hint=F.explore?'Every area is open. Tap the map to explore all three floors.':F.stage==='find'?(F.fuses<3?'One fuse per floor. The map marks each fuse.':'Put the fuses in the breaker by the freight lift (basement).'):F.stage==='wait'?'Stay alive.':'The lift is open.';
     /* 3.16: the long hint shows when it changes, then fades, so the screen stays clean like the reference */
     if(hint!==F.hintTx){F.hintTx=hint;F.hintT=F.t;}set('hzbest',hint);const e=$('hzbest');if(e){const o=F.t-F.hintT<14?'1':'0';if(e.style.opacity!==o){e.style.transition='opacity 1.6s';e.style.opacity=o;}}}
   const st=$('hzsta');if(st){const on=pl.sta<.995||F.running;if(st.classList.contains('on')!==on)st.classList.toggle('on',on);if(st.classList.contains('tired')!==pl.tired)st.classList.toggle('tired',pl.tired);const w=Math.round(pl.sta*100)+'%';if(st.firstChild.style.width!==w)st.firstChild.style.width=w;}
@@ -16144,8 +16163,9 @@ function facHauntInit(F){
     F.scene.add(sign);F.haunt.signs.push(sign);F.haunt.signMats.push(...sign.userData.materials);F.haunt.signTex.push(...sign.userData.textures);
   }
 }
-function facHauntFree(F){if(window.FacilityWorld?.enemyOutside(F.pl))return false;return F.haunt&&!F.haunt.active&&F.t>=F.haunt.next&&F.t>=(F.dir?.recoverUntil||0)&&F.t-(F.dir?.lastChase||-99)>12&&F.stage==='find'&&F.dm.st!=='chase'&&F.dm.st!=='reveal'&&(!F.dm.on||F.dm.st==='away'||Math.hypot(F.dm.x-F.pl.x,F.dm.y-F.pl.y,F.dm.z-F.pl.z)>8);}
+function facHauntFree(F){if(F.explore||window.FacilityWorld?.enemyOutside(F.pl))return false;return F.haunt&&!F.haunt.active&&F.t>=F.haunt.next&&F.t>=(F.dir?.recoverUntil||0)&&F.t-(F.dir?.lastChase||-99)>12&&F.stage==='find'&&F.dm.st!=='chase'&&F.dm.st!=='reveal'&&(!F.dm.on||F.dm.st==='away'||Math.hypot(F.dm.x-F.pl.x,F.dm.y-F.pl.y,F.dm.z-F.pl.z)>8);}
 function facHauntSpawn(F,kind,p,mode,door){
+  if(F.explore)return false;
   const S=F.haunt,a=S.actors.find(a=>a.kind===kind);if(!a||S.active)return false;
   if(!p.every(Number.isFinite))return false;
   const pos={x:p[0],y:p[1],z:p[2]},r=a.radius||.26,h=a.height||1.9;
@@ -16321,7 +16341,8 @@ function facSize(F){
   if(F.rs==null)F.rs=1;
   // Mobile Auto avoids a high-resolution, four-sample framebuffer on phones.
   const quality=isTouch&&qMode()==='auto'?1:clamp(q,.6,1.35),target=window.__hzRH||Math.min(900,(isTouch?480:640)*quality)*F.rs;
-  const RH=Math.max(Math.min(360,h),Math.min(h*Math.min(2,devicePixelRatio||1),Math.round(target/16)*16))|0,RW=Math.min(isTouch?1280:1700,Math.round(RH*a));
+  const minLines=isTouch&&qMode()==='auto'?288:360;
+  const RH=Math.max(Math.min(minLines,h),Math.min(h*Math.min(2,devicePixelRatio||1),Math.round(target/16)*16))|0,RW=Math.min(isTouch?1280:1700,Math.round(RH*a));
   const cv=renderer.domElement;if(cv.width!==RW||cv.height!==RH){renderer.setSize(RW,RH,false);cam.aspect=a;cam.updateProjectionMatrix();}
   if(F.post)F.post.size(RW,RH);
 }
@@ -16329,17 +16350,18 @@ function facTick(dt){
   const H=HZ,F=H&&H.fac;if(!F||!F.pl)return;if(window.__facManual&&!window.__facStep)return;
   facSize(F);
   if(H.loading||(H.paused&&!F.coop)){facCam(F,0);if(F.au&&AC)F.au.amb.gain.setTargetAtTime(.01,AC.currentTime,.3);return;}
+  if(F.map?.open&&!F.coop){H.lastNow=0;return;}
   if(!facCoopTick(F,Math.min(dt,.05))){facCam(F,0);facHud(F);return;}
   dt=Math.min(dt,1/20);F.t+=dt;H.t=F.t;
   {const now=performance.now(),rd=H.lastNow?(now-H.lastNow)/1000:.016;H.lastNow=now;H.fpsA=(H.fpsA||60)*.95+(1/Math.max(.001,rd))*.05;
-    /* 3.16: hold the frame rate by changing the render size a step at a time (never below 360 lines) */
+    /* Auto resolution can step down further on phones during sustained load. */
     if(rd<.25&&!window.__facManual&&!window.__hzRH){F.ftA=F.ftA==null?16.7:F.ftA*.94+rd*1000*.06;F.rsT=(F.rsT||0)+rd;
       if(F.rsT>1.2){F.rsT=0;if(F.ftA>19.5&&F.rs>.5){F.rs=Math.max(.5,F.rs*.87);F.rsGood=0;}else if(F.ftA<17.6&&F.rs<1){F.rsGood=(F.rsGood||0)+1;if(F.rsGood>=3){F.rs=Math.min(1,F.rs*1.06);F.rsGood=0;}}else F.rsGood=0;H.lowRes=F.rs<.72;}}}
   if(H.dead){facDeadTick(F,dt);facAudio(F,dt);return;}
   if(H.won){facWinTick(F,dt);facCam(F,dt);return;}
-  if(!H.paused)facPlayer(F,dt);else{F.pl.vx=F.pl.vz=0;F.running=false;}
+  if(!H.paused&&!F.map?.open)facPlayer(F,dt);else{F.pl.vx=F.pl.vz=0;F.running=false;}
   window.FacilityWorld?.tick(F,dt,facAuthority(F));
-  if(facAuthority(F)){facDoorsTick(F,dt);facDemonTick(F,dt);if(H.dead)return;facDirector(F,dt);facItems(F,dt);facHauntTick(F,dt);facHealthTick(F,dt);}
+  if(facAuthority(F)){facDoorsTick(F,dt);if(!F.explore){facDemonTick(F,dt);if(H.dead)return;facDirector(F,dt);facItems(F,dt);facHauntTick(F,dt);facHealthTick(F,dt);}}
   for(const v of F.vents)if(v.fall){v.vy-=14*dt;v.gr.position.y+=v.vy*dt;v.gr.rotation.x+=dt*3;const g=facGround(F,v.x,v.z,v.gr.position.y+.3,.4);if(v.gr.position.y<g+.02){v.gr.position.y=g+.02;v.gr.rotation.x=0;v.fall=0;}}
   facCam(F,dt);facAudio(F,dt);facHud(F);
   if(H.dead)return;
@@ -16354,7 +16376,7 @@ function facRender(){
 }
 /* ---------- caught ---------- */
 function facDie(F){
-  const H=HZ;if(H.dead)return;facHauntEnd(F);H.dead=true;F.deadT=0;F.dm.st='kill';F.dm.on=true;F.dm.g.visible=true;
+  const H=HZ;if(H.dead)return;window.FacilityMap?.close(F);facHauntEnd(F);H.dead=true;F.deadT=0;F.dm.st='kill';F.dm.on=true;F.dm.g.visible=true;
   try{if(document.pointerLockElement)document.exitPointerLock();}catch(_){}
   try{$('hzui').classList.add('dead');}catch(_){}hzScream();F.shake=1.2;F.dieYaw=null;try{vib&&vib([120,40,200]);}catch(_){}if(F.post)F.post.mat.uniforms.uHurt.value=.35;
   const tm=F.t;H.result={txt:'Fuses '+F.fuses+' of 3 · '+hsClock(tm)};
@@ -16378,7 +16400,7 @@ function facDeadTick(F,dt){
   if(F.deadT>1.65&&!H.shown){H.shown=1;const o=$('hzover');o.classList.add('on');$('hzot').className='';$('hzot').textContent='IT CAUGHT YOU';$('hzop').textContent=H.result.txt;$('hzres').style.display='none';}
 }
 /* ---------- out ---------- */
-function facWin(F){const H=HZ;if(H.won)return;facHauntEnd(F);H.won=true;F.winT=0;try{$('hzui').classList.add('dead');}catch(_){}F.lift.want=0;F.pl.vx=F.pl.vz=0;
+function facWin(F){const H=HZ;if(H.won)return;window.FacilityMap?.close(F);facHauntEnd(F);H.won=true;F.winT=0;try{$('hzui').classList.add('dead');}catch(_){}F.lift.want=0;F.pl.vx=F.pl.vz=0;
   const tm=F.t,best=meta.facBest&&meta.facBest<tm?meta.facBest:tm,nb=!meta.facBest||tm<meta.facBest;meta.facBest=best;try{save();}catch(_){}
   H.result={txt:'Escaped in '+hsClock(tm)+(nb?' · NEW BEST':' · best '+hsClock(best))};facSay(F,'',.1);}
 function facWinTick(F,dt){
@@ -16394,7 +16416,7 @@ function facWinTick(F,dt){
 function facDispose(H,keep){
   const F=H.fac;if(!F)return;
   window.FacilityWorld?.dispose(F);
-  facCoopDispose(F);document.getElementById('fhealth')?.remove();
+  facCoopDispose(F);window.FacilityMap?.dispose(F);document.getElementById('fhealth')?.remove();
   try{facAudioStop(F);facHauntDispose(F);}catch(_){}
   try{if(HZA){if(F.dmat0)HZA.mesh.material=F.dmat0;if(HZA.root.parent)HZA.root.parent.remove(HZA.root);}if(F.dm&&F.dm.mix)F.dm.mix.stopAllAction();if(F.dmat)F.dmat.dispose();}catch(_){}
   /* what belongs to this run only: doors, pickups, the hand, the lift doors */
@@ -20090,15 +20112,17 @@ fixBar();buildTitleLevel();resize();requestAnimationFrame(frame);
   document.getElementById('ro-skip').addEventListener('click',dismiss);
 })();
 </script>
-<script src="assets/horror/spider.js?v=chase-r5-20261024"></script>
-<script src="assets/horror/ghost.js?v=chase-r5-20261024"></script>
-<script src="assets/horror/signs.js?v=chase-r5-20261024"></script>
-<link rel="stylesheet" href="assets/facility-survival.css?v=chase-r5">
-<script src="assets/facility-navigation.js?v=chase-r5"></script>
-<script src="assets/facility-survival.js?v=chase-r5"></script>
-<script src="assets/facility-world.js?v=chase-r5"></script>
-<script src="assets/facility-relay.js?v=chase-r5"></script>
-<script src="assets/facility-coop.js?v=chase-r5"></script>
+<script src="assets/horror/spider.js?v=explore-r6-20261027"></script>
+<script src="assets/horror/ghost.js?v=explore-r6-20261027"></script>
+<script src="assets/horror/signs.js?v=explore-r6-20261027"></script>
+<link rel="stylesheet" href="assets/facility-survival.css?v=explore-r6">
+<link rel="stylesheet" href="assets/facility-map.css?v=explore-r6">
+<script src="assets/facility-map.js?v=explore-r6"></script>
+<script src="assets/facility-navigation.js?v=explore-r6"></script>
+<script src="assets/facility-survival.js?v=explore-r6"></script>
+<script src="assets/facility-world.js?v=explore-r6"></script>
+<script src="assets/facility-relay.js?v=explore-r6"></script>
+<script src="assets/facility-coop.js?v=explore-r6"></script>
 <script id="facility-direct-entry">
 (function(){
   let tries=0,done=false;
