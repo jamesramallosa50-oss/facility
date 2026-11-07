@@ -1,6 +1,6 @@
 /* Hosted HTTPS co-op. Only the host simulates the world.
    Guests send movement and interaction requests; snapshots own all shared state. */
-const FNET={version:2,build:'explore-r6',prefix:'facility-v1-',hz:12,max:4,timeout:25000};
+const FNET={version:2,build:'creature-r7',prefix:'facility-v1-',hz:12,max:4,timeout:25000};
 function facNetName(v){return String(v||'Survivor').replace(/[^\p{L}\p{N} _-]/gu,'').trim().slice(0,18)||'Survivor';}
 function facNetCode(v){return String(v||'').toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,6);}
 function facNetSend(conn,data,essential=false){
@@ -237,7 +237,13 @@ function facNetVisuals(F,dt){
     if(F.runner&&C.world.runner){const r=C.world.runner,a=F.runner;for(const axis of['x','y','z'])a[axis]+=(r[axis]-a[axis])*k;a.face+=Math.atan2(Math.sin(r.face-a.face),Math.cos(r.face-a.face))*k;a.speed=r.speed;a.mode=r.mode;if(a.g.visible)window.FacilityWorld.runnerAnimation(a,dt,a.speed);}
     if(S){
       if(!h){if(S.active){S.active.g.visible=false;S.active.on=false;}S.active=null;}
-      else{const a=S.actors.find(a=>a.kind===h.kind);if(a){if(S.active&&S.active!==a)S.active.g.visible=false;if(a.serial!==h.serial){a.stung=false;a.serial=h.serial;}S.active=a;Object.assign(a,h,{on:true});a.g.position.set(h.x,h.y,h.z);a.g.rotation.y=h.face;a.g.visible=!!h.revealed;
+      else{const a=S.actors.find(a=>a.kind===h.kind);if(a){
+        const fresh=S.active!==a||a.serial!==h.serial;if(S.active&&S.active!==a)S.active.g.visible=false;
+        if(fresh){a.stung=false;if(a.spider)window.FacilitySpider.reset(a.spider);if(a.ghost)window.FacilityGhost.reset(a.ghost);}
+        const snap=fresh||Math.hypot(h.x-a.x,h.y-a.y,h.z-a.z)>4;
+        for(const axis of ['x','y','z'])a[axis]=snap?h[axis]:a[axis]+(h[axis]-a[axis])*k;
+        a.g.rotation.y=snap?h.face:a.g.rotation.y+Math.atan2(Math.sin(h.face-a.g.rotation.y),Math.cos(h.face-a.g.rotation.y))*k;
+        Object.assign(a,{kind:h.kind,serial:h.serial,mode:h.mode,revealed:h.revealed,age:h.age,on:true,netSpeed:h.speed});S.active=a;a.g.position.set(a.x,a.y,a.z);a.g.visible=!!h.revealed;
         if(h.revealed&&!a.stung&&Math.abs(h.y-F.pl.y)<1&&Math.hypot(h.x-F.pl.x,h.z-F.pl.z)<12&&facOnScreen(F,h.x,h.y+(a.eye||1),h.z)&&facSee(F,F.pl.x,F.camY,F.pl.z,h.x,h.y+(a.eye||1),h.z,false))facHauntSting(F,a);
         if(a.spider)window.FacilitySpider.tick(a.spider,h.speed,dt);if(a.ghost)window.FacilityGhost.tick(a.ghost,h.speed,dt,h.mode);}}
       for(const sign of S.signs)sign.visible=sign.userData.band===facBand(F.pl.y+.1)&&sign.position.distanceToSquared(cam.position)<900;

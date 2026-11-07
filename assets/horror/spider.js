@@ -100,12 +100,12 @@
     if(asset.owner)release(asset.owner);
     const visual=new T.Group();visual.add(asset.visual);
     const mixer=new T.AnimationMixer(asset.root),walk=mixer.clipAction(asset.walk),run=mixer.clipAction(asset.run);
-    const actor={visual,mixer,walk,run,runWeight:0,squeeze:1,radius:.42,height:.78,eye:.52};asset.owner=actor;
+    const actor={visual,mixer,walk,run,runWeight:0,squeeze:1,radius:.42,height:.78,eye:.52,animDt:0,animInterval:global.matchMedia?.('(pointer:coarse)').matches?1/30:0};asset.owner=actor;
     reset(actor);return actor;
   }
   function reset(actor){
     actor.mixer.stopAllAction();actor.walk.reset().setEffectiveWeight(1).play();actor.run.reset().setEffectiveWeight(0).play();
-    actor.walk.paused=actor.run.paused=false;actor.runWeight=0;actor.squeeze=1;actor.visual.scale.set(1,1,1);asset.visual.position.y=.012;actor.mixer.update(0);alignFeet(actor);
+    actor.walk.paused=actor.run.paused=false;actor.runWeight=0;actor.squeeze=1;actor.animDt=0;actor.visual.scale.set(1,1,1);asset.visual.position.y=.012;actor.mixer.update(0);alignFeet(actor);
   }
   function tick(actor,speed,dt,passageWidth){
     if(!actor||!Number.isFinite(dt)||dt<=0)return;
@@ -114,6 +114,7 @@
     // Only the actor parent changes, so the supplied rig and clips stay intact.
     const width=Number.isFinite(passageWidth)?clamp(passageWidth/asset.width,.45,1):1;
     actor.squeeze+=(width-actor.squeeze)*(1-Math.exp(-16*dt));actor.visual.scale.x=actor.squeeze;
+    actor.animDt+=dt;if(actor.animDt+1e-8<actor.animInterval)return;dt=actor.animDt;actor.animDt=0;
     const gait=.92/asset.span;
     const moving=speed>.08,target=clamp((speed-1.3)/1.7,0,1);
     actor.runWeight+=(target-actor.runWeight)*(1-Math.exp(-12*dt));

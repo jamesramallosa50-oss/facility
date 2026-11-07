@@ -12,11 +12,23 @@
   for(let i=0;i<N.N;i++){full[i]=find(full,i);walk[i]=find(walk,i);}N.components=full;N.walkComponents=walk;
  }
  function buffers(N){return{nav:N,g:new Float64Array(N.N),score:new Float64Array(N.N),from:new Int32Array(N.N),mark:new Uint32Array(N.N),closed:new Uint32Array(N.N),heap:new Int32Array(N.N),position:new Int32Array(N.N),generation:0};}
+ function reserve(F,owner){let P=owner.routeBuffers;if(!P||P.nav!==F.nav)P=owner.routeBuffers=buffers(F.nav);return P;}
+ // A yielded search may finish after the actor has already walked along its
+ // previous route. Join at its present cell, never the search's old start.
+ function cursor(F,actor,path,canJoin){
+  if(!path?.length)return -1;const N=F.nav,x=Math.floor(actor.x/.5),z=Math.floor(actor.z/.5),near=[];
+  for(let i=0;i<path.length;i++){const n=path[i],dy=Math.abs(N.ny[n]-actor.y);if(dy>.6)continue;
+   if(N.nx[n]===x&&N.nz[n]===z&&dy<.35)return Math.min(i+1,path.length-1);
+   const dx=(N.nx[n]+.5)*.5-actor.x,dz=(N.nz[n]+.5)*.5-actor.z,d=dx*dx+dz*dz+dy*dy*4;if(d>2.25)continue;
+   let j=0;while(j<near.length&&(near[j].d<d||near[j].d===d&&near[j].i>i))j++;if(j<4){near.splice(j,0,{i,n,d});if(near.length>4)near.pop();}
+  }
+  for(const c of near)if(c.d<.01||canJoin(c.n))return c.i;return -1;
+ }
  function start(F,owner,a,b,noLinks,maxN=30000){
   const N=F.nav,C=noLinks?N.walkComponents:N.components,J={owner,nav:N,links:F.linkSet,start:a,goal:b,noLinks,done:false,delivered:false,path:null,expanded:0,count:0,limit:maxN};
   if(a<0||b<0||a>=N.N||b>=N.N||C&&C[a]!==C[b]){J.done=true;return J;}
   if(a===b){J.done=true;J.path=[a];return J;}
-  let P=owner.routeBuffers;if(!P||P.nav!==N)P=owner.routeBuffers=buffers(N);
+  const P=reserve(F,owner);
   if(++P.generation>=0xffffffff){P.mark.fill(0);P.closed.fill(0);P.generation=1;}
   J.P=P;J.gen=P.generation;J.bx=N.nx[b];J.by=N.ny[b];J.bz=N.nz[b];P.mark[a]=J.gen;P.from[a]=-1;P.g[a]=0;P.score[a]=heuristic(J,a);P.heap[0]=a;P.position[a]=0;J.count=1;return J;
  }
@@ -53,5 +65,5 @@
   work(F);return J;
  }
  function path(F,a,b,maxN,noLinks){prepare(F);const owner=F.syncRouteOwner||(F.syncRouteOwner={}),J=start(F,owner,a,b,!!noLinks,maxN||30000);while(!J.done)step(J,1024);return J.path;}
- global.FacilityNavigation={prepare,route,path,step,limits:{nodes:MAX_NODES,milliseconds:MAX_MS}};
+ global.FacilityNavigation={prepare,reserve,cursor,route,path,step,limits:{nodes:MAX_NODES,milliseconds:MAX_MS}};
 })(typeof window!=='undefined'?window:globalThis);

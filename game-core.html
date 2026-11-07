@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>The Facility — Night Courtyard</title>
-<meta name="facility-build" content="explore-r6-20261027">
+<meta name="facility-build" content="creature-r7-20261107">
 <meta name="theme-color" content="#060807">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="mobile-web-app-capable" content="yes">
@@ -15518,11 +15518,22 @@ function facDoorSide(d,x,z){return (x-d.cx)*d.nx+(z-d.cz)*d.nz>=0?1:-1;}
 /* open a door away from whoever opens it; returns false if locked */
 function facDoorOpen(F,d,x,z,fast){if(d.lock)return false;if(facCoopDoor(F,d))return true;const side=facDoorSide(d,x,z);d.tgt=-side*1.58;d.stiff=fast?44:13;d.damp=fast?7:6.2;if(!fast)facSndCreak(F,d,.7+Math.random()*.4);else facSndSlam(F,d,1);d.opening=1;facHauntDoor(F,d,x,z);return true;}
 function facDoorClose(F,d,fast){d.tgt=0;d.stiff=fast?55:12;d.damp=fast?6:6;d.closing=fast?2:1;if(!fast)facSndCreak(F,d,.5);}
+function facDoorYield(F,e,d,r,h,su,dt){
+  let wait=e.waitDoor;
+  if(!wait||wait.d!==d)wait=e.waitDoor={d,side:facDoorSide(d,e.x,e.z),angle:d.th,progress:F.t,at:F.t};
+  if(Math.abs(d.th-wait.angle)>.035){wait.angle=d.th;wait.progress=F.t;}
+  if(F.t-wait.progress>.65){
+    const distance=d.w+r+.2,tx=d.cx+d.nx*wait.side*distance,tz=d.cz+d.nz*wait.side*distance,dx=tx-e.x,dz=tz-e.z,len=Math.hypot(dx,dz),clearance=((e.x-d.cx)*d.nx+(e.z-d.cz)*d.nz)*wait.side;
+    if(clearance<distance-.08&&len>.08){const step=Math.min(len,1.6*dt);facMove(F,e,dx/len*step,dz/len*step,r,h,su);const floor=facGround(F,e.x,e.z,e.y,su);if(Math.abs(floor-e.y)<.5)e.y=floor;}
+  }
+  return F.t-wait.progress>4;
+}
 /* does the leaf at angle th touch a body */
 function facDoorHits(F,d,th,ent,r){const a=d.a0+th,ex=Math.cos(a)*d.w,ez=Math.sin(a)*d.w;if(Math.abs(ent.y-d.y)>2)return false;
   let t=((ent.x-d.hx)*ex+(ent.z-d.hz)*ez)/(d.w*d.w);t=t<0?0:t>1?1:t;const qx=d.hx+ex*t,qz=d.hz+ez*t;return Math.hypot(ent.x-qx,ent.z-qz)<r+.05;}
 function facDoorsTick(F,dt){
-  const pl=F.pl,dm=F.dm;
+  const pl=F.pl,dm=F.dm,bodies=facPlayers(F).filter(p=>!p.loading&&!p.offline);
+  if(dm.on)bodies.push(dm);if(F.haunt?.active?.on)bodies.push(F.haunt.active);if(F.runner?.on&&!F.explore)bodies.push(F.runner);
   for(const d of F.doors){const k=d.stiff||14,c=d.damp||6.5;
     /* pushed by a body: the leaf swings freely (heavy and damped) wherever it is pushed */
     if(d.pushW){if(!d.lock){d.om+=clamp(d.pushW,-1.5,1.5)*14*dt;
@@ -15534,8 +15545,7 @@ function facDoorsTick(F,dt){
     const n=dt>1/45?2:1,h=dt/n;
     for(let s=0;s<n;s++){d.om+=(k*(d.tgt-d.th)-c*d.om)*h;let nt=d.th+d.om*h;nt=Math.max(-1.62,Math.min(1.62,nt));
       /* the leaf stops against a body rather than pushing through it */
-      if(facPlayers(F).some(p=>!p.loading&&!p.offline&&facDoorHits(F,d,nt,p,.3)&&!facDoorHits(F,d,d.th,p,.3))){d.om*=-.15;if(Math.abs(d.om)>.3)facSndBump(F,d);break;}
-      if(dm.vis!==false&&dm.on&&facDoorHits(F,d,nt,dm,.32)&&!facDoorHits(F,d,d.th,dm,.32)){d.om*=-.1;break;}
+      if(bodies.some(p=>{const r=p===dm?.32:p.radius||.3;return facDoorHits(F,d,nt,p,r)&&!facDoorHits(F,d,d.th,p,r);})){d.om*=-.15;break;}
       /* shutting: it latches as it reaches the frame */
       if(d.tgt===0&&((d.th>0&&nt<=0)||(d.th<0&&nt>=0))){const sp=Math.abs(d.om);nt=0;d.om=0;if(sp>4)facSndSlam(F,d,Math.min(1.3,sp/7));else facSndLatch(F,d);facNoise(F,d.cx,d.y,d.cz,sp>4?16:5);d.closing=0;}
       if(Math.abs(nt)>=1.62&&Math.abs(d.om)>2){facSndBang(F,d,Math.min(1,Math.abs(d.om)/9));d.om*=-.25;}
@@ -15605,11 +15615,19 @@ async function facBuild(prog){
   facHealthInit(F);
   facAudioInit(F);
   facDemonInit(F);facHauntInit(F);window.FacilityWorld.init(F);facExploreApply(F,F.explore);
+  if(!F.explore&&facAuthority(F))for(const actor of [F.dm,...F.haunt.actors,F.runner])if(actor)window.FacilityNavigation.reserve(F,actor);
   if(F.dmShadow&&F.shadows)HZA.mesh.castShadow=true;
   for(const d of F.lift.doors)d.g.castShadow=!!F.shadows;
-  try{renderer.compile(sc,cam);renderer.compile(F.hand.sc,cam);}catch(_){}
+  try{renderer.compile(sc,cam);renderer.compile(F.hand.sc,cam);facWarmCreatures(F);}catch(error){console.warn('Creature warmup',error);}
   await step(1,'');
   facCoopStart(F);
+}
+function facWarmCreatures(F){
+  if(F.explore)return;
+  const groups=[F.dm?.g,...(F.haunt?.actors||[]).map(a=>a.g),F.runner?.g].filter(Boolean),visibility=groups.map(g=>g.visible);
+  const previous=renderer.getRenderTarget(),auto=renderer.autoClear,target=new T.WebGLRenderTarget(4,4,{minFilter:T.NearestFilter,magFilter:T.NearestFilter});
+  try{groups.forEach(g=>g.visible=true);renderer.setRenderTarget(target);renderer.autoClear=true;renderer.render(F.scene,cam);}
+  finally{groups.forEach((g,i)=>g.visible=visibility[i]);renderer.setRenderTarget(previous);renderer.autoClear=auto;target.dispose();}
 }
 /* ---------- things you pick up and use: fuses, batteries, the breaker, the lift ---------- */
 function facObjects(F){
@@ -15747,9 +15765,9 @@ function facDemonInit(F){
   for(const d of F.doors)if(Math.abs(d.cx-6.25)<.3&&Math.abs(d.cz-3)<.6&&d.k===1){d.th=d.tgt=-1.5*facDoorSide(d,10,3);d.mesh.rotation.y=-(d.a0+d.th);}
   F.dir={t:0,calm:0,lastSeen:0,lastChase:0,ambT:42,awayT:0,alertAt:-1,final:false,seenOnce:false,graceUntil:F.t+22,recoverUntil:0};
 }
-function facDmPlace(F,x,y,z,face){const dm=F.dm;dm.x=x;dm.y=y;dm.z=z;if(face!=null)dm.face=face;dm.path=null;dm.route=null;dm.repT=0;dm.on=true;dm.g.visible=true;dm.leap=null;dm.bash=null;dm.safeUntil=F.t+2;dm.grabT=0;dm.alert=0;dm.sees=0;dm.lastVisual=-99;}
+function facDmPlace(F,x,y,z,face){const dm=F.dm;dm.x=x;dm.y=y;dm.z=z;if(face!=null)dm.face=face;dm.path=null;dm.route=null;dm.repT=0;dm.waitDoor=null;dm.on=true;dm.g.visible=true;dm.leap=null;dm.bash=null;dm.safeUntil=F.t+2;dm.grabT=0;dm.alert=0;dm.sees=0;dm.lastVisual=-99;}
 function facDmState(F,st){const dm=F.dm;if(dm.st!==st){
-  dm.prev=dm.st;dm.st=st;dm.stT=0;dm.path=null;dm.route=null;dm.repT=0;dm.grabT=0;
+  dm.prev=dm.st;dm.st=st;dm.stT=0;dm.path=null;dm.route=null;dm.repT=0;dm.grabT=0;dm.waitDoor=null;
   if(st==='chase'){dm.safeUntil=Math.max(dm.safeUntil||0,F.t+1.2);dm.lastVisual=F.t;}
   if(st==='search'){dm.sp=null;dm.looks=0;if(dm.prev==='chase'){F.dir.recoverUntil=F.t+14;dm.alert=0;}}
   if(st==='prowl')dm.goalP=null;
@@ -15785,14 +15803,18 @@ function facDmGo(F,tx,ty,tz,spd,dt){
   if(dm.leap){const L=dm.leap;L.t+=dt;const k=Math.min(1,L.t/L.dur),x=L.a[0]+(L.b[0]-L.a[0])*k,z=L.a[2]+(L.b[2]-L.a[2])*k,y=L.a[1]+(L.b[1]-L.a[1])*k+Math.sin(k*Math.PI)*(L.up?1.1:.6);
     dm.x=x;dm.y=y;dm.z=z;dm.fwant=Math.atan2(L.b[0]-L.a[0],L.b[2]-L.a[2]);if(k>=1){dm.leap=null;dm.y=L.b[1];facDmLand(F);dm.path=null;dm.route=null;dm.repT=0;}return 'leap';}
   if(dm.bash){const B=dm.bash;B.t+=dt;dm.fwant=Math.atan2(B.d.cx-dm.x,B.d.cz-dm.z);if(B.t>=B.dur){if(!B.done){B.done=1;facDoorOpen(F,B.d,dm.x,dm.z,B.fast);if(B.fast){facNoise(F,B.d.cx,B.d.y,B.d.cz,22);F.shake=Math.max(F.shake||0,.4*clamp(1-Math.hypot(F.pl.x-dm.x,F.pl.z-dm.z)/12,0,1));}}
-      if(Math.abs(B.d.th)>1.38)dm.bash=null;}return 'bash';}
+      if(Math.abs(B.d.th)>1.38){dm.bash=null;dm.waitDoor=null;}else if(facDoorYield(F,dm,B.d,FDM.r,FDM.h,FDM.su,dt)){dm.bash=null;dm.path=null;dm.route=null;dm.repT=.3;dm.waitDoor=null;}}return 'bash';}
   // A clear physical capsule path avoids zigzags between grid centres.
   dm.lineT=(dm.lineT||0)-dt;
   if(dm.lineT<=0){dm.lineT=.16;dm.direct=facHauntClear(F,{x:dm.x,y:dm.y,z:dm.z,radius:FDM.r,height:FDM.h},tx,ty,tz);}
   if(dm.direct&&Math.abs(ty-dm.y)<.3){dm.route=null;dm.path=null;dm.repT=0;const dx=tx-dm.x,dz=tz-dm.z,l=Math.hypot(dx,dz);if(l<.1)return 'there';const step=Math.min(l,spd*dt);facMove(F,dm,dx/l*step,dz/l*step,FDM.r,FDM.h,FDM.su);dm.fwant=Math.atan2(dx,dz);facDmGround(F);return 'move';}
   dm.repT=(dm.repT||0)-dt;const goal=facNodeNear(F,tx,ty,tz);
   const route=window.FacilityNavigation.route(F,dm,facNodeNear(F,dm.x,dm.y,dm.z),goal,dm.repT<=0);
-  if(route?.done&&!route.delivered){route.delivered=true;dm.repT=dm.st==='chase'?.35:1.2;dm.goal=route.goal;dm.path=route.path;dm.pi=0;dm.ahead=null;dm.wlT=0;}
+  if(route?.done&&!route.delivered){route.delivered=true;dm.repT=dm.st==='chase'?.35:1.2;
+    const cursor=window.FacilityNavigation.cursor(F,dm,route.path,n=>facHauntClear(F,{x:dm.x,y:dm.y,z:dm.z,radius:FDM.r,height:FDM.h},...facNP(F,n)));
+    if(!route.path||cursor>=0){dm.goal=route.goal;dm.path=route.path;dm.pi=Math.max(0,cursor);dm.ahead=null;dm.wlT=0;}
+    else{dm.route=null;dm.repT=.1;}
+  }
   if(!dm.path&&route&&!route.done)return 'move';
   const P=dm.path;if(!P||P.length<2){/* no route: walk straight if it is close */const dx=tx-dm.x,dz=tz-dm.z,l=Math.hypot(dx,dz),sameY=Math.abs(ty-dm.y)<1.2;if(l<.4&&sameY)return 'there';if(!sameY&&l<.4)return 'move';
     facMove(F,dm,dx/l*spd*dt,dz/l*spd*dt,FDM.r,FDM.h,FDM.su);dm.fwant=Math.atan2(dx,dz);facDmGround(F);return l<1&&sameY?'there':'move';}
@@ -15855,7 +15877,12 @@ function facDemonTick(F,dt){
       dm.spT-=dt;res=facDmGo(F,dm.sp[0],dm.sp[1],dm.sp[2],spd,dt);if(res==='there'){spd=0;if(dm.lookB==null)dm.lookB=dm.face;dm.fwant=dm.lookB+Math.sin(dm.stT*1.3)*1.1;if(dm.spT>2)dm.spT=2;}else dm.lookB=null;
       if(dm.stT>18||dm.looks>4){dm.looks=0;facDmState(F,'prowl');D.calm=0;}break;}
     case 'chase':{spd=chaseSpd*(dm.stT<.8?.8:1);const seenAgo=F.t-(dm.lastVisual==null?-99:dm.lastVisual);
-      const m=dm.mem;if(!m){facDmState(F,'prowl');break;}res=facDmGo(F,m.x,m.y,m.z,spd,dt);
+      const m=dm.mem;if(!m){facDmState(F,'prowl');break;}
+      const close=dm.sees>0&&Math.abs(pl.y-dm.y)<.65&&Math.hypot(dx,dz)<1.6;
+      if(close){const distance=Math.hypot(dx,dz);dm.fwant=Math.atan2(dx,dz);
+        if(distance>.7)res=facDmGo(F,pl.x-dx/distance*.7,pl.y,pl.z-dz/distance*.7,spd,dt);
+        else{res='there';spd=0;dm.path=null;dm.route=null;}
+      }else res=facDmGo(F,m.x,m.y,m.z,spd,dt);
       if(seenAgo>(D.final?4:3.2)){facDmState(F,'search');}
       if(res==='there'&&seenAgo>1.2){facDmState(F,'search');}
       D.lastChase=F.t;break;}
@@ -16173,7 +16200,7 @@ function facHauntSpawn(F,kind,p,mode,door){
   const ground=facGround(F,pos.x,pos.z,pos.y,.35);if(!Number.isFinite(ground)||Math.abs(ground-pos.y)>.35)return false;pos.y=ground;
   if(a.spider&&mode!=='door')mode='hunt';
   S.netSerial=(S.netSerial||0)+1;
-  Object.assign(a,{x:pos.x,y:pos.y,z:pos.z,age:0,mode,door:door||null,on:true,revealed:mode!=='door',path:null,route:null,pi:0,repath:0,lineT:0,direct:false,seen:0,stung:false,doorAt:0,stuck:0,aware:false,lastSeen:0,target:null,targetId:F.pl.netId||'local',serial:S.netSerial,chaseAt:0,contact:0,reaction:mode==='door'?FSP.doorReaction:FSP.reaction,life:a.spider?FSP.life:mode==='hunt'?6:mode==='watch'?5:2.4});
+  Object.assign(a,{x:pos.x,y:pos.y,z:pos.z,age:0,mode,door:door||null,on:true,revealed:mode!=='door',path:null,route:null,pi:0,repath:0,lineT:0,direct:false,seen:0,stung:false,doorAt:0,waitDoor:null,stuck:0,aware:false,lastSeen:0,target:null,targetId:F.pl.netId||'local',serial:S.netSerial,chaseAt:0,contact:0,reaction:mode==='door'?FSP.doorReaction:FSP.reaction,life:a.spider?FSP.life:mode==='hunt'?6:mode==='watch'?5:2.4});
   if(a.spider)window.FacilitySpider.reset(a.spider);if(a.ghost)window.FacilityGhost.reset(a.ghost);
   a.g.position.set(a.x,a.y,a.z);a.g.rotation.y=Math.atan2(F.pl.x-a.x,F.pl.z-a.z);a.g.visible=a.revealed;S.active=a;S.next=F.t+38+Math.random()*18;return true;
 }
@@ -16210,7 +16237,11 @@ function facHauntWalk(F,a,tx,ty,tz,speed,dt){
   if(a.direct){a.route=null;a.path=null;a.repath=0;p=[tx,ty,tz];}
   else{
     const goal=facNodeNear(F,tx,ty,tz),route=window.FacilityNavigation.route(F,a,facNodeNear(F,a.x,a.y,a.z),goal,a.repath<=0,true);
-    if(route?.done&&!route.delivered){route.delivered=true;a.repath=.45;a.goal=route.goal;a.path=route.path;a.pi=1;}
+    if(route?.done&&!route.delivered){route.delivered=true;a.repath=.45;
+      const cursor=window.FacilityNavigation.cursor(F,a,route.path,n=>facHauntClear(F,a,...facNP(F,n)));
+      if(!route.path||cursor>=0){a.goal=route.goal;a.path=route.path;a.pi=Math.max(0,cursor);}
+      else{a.route=null;a.repath=.1;}
+    }
     if(!a.path)return;
     // Skip reached nodes within the same frame. Returning at every node used
     // to interrupt the gait and throw away a large part of the chase speed.
@@ -16219,10 +16250,12 @@ function facHauntWalk(F,a,tx,ty,tz,speed,dt){
       if(di>=0){
         const door=F.doors[di];if(door.lock){a.path=null;a.route=null;a.repath=.45;return;}
         point[0]=door.cx;point[2]=door.cz;
-        if(Math.abs(door.th)<1.4){
+        if(Math.abs(door.th)<1.4&&Math.hypot(door.cx-a.x,door.cz-a.z)<1.8){
           if(F.t>=(a.doorAt||0)&&Math.abs(door.tgt)<1.4){facDoorOpen(F,door,a.x,a.z,false);a.doorAt=F.t+1;}
+          if(facDoorYield(F,a,door,a.radius||.26,a.height||1.9,a.spider?.28:.4,dt)){a.path=null;a.route=null;a.repath=.3;a.waitDoor=null;}
           return;
         }
+        if(Math.abs(door.th)>=1.4)a.waitDoor=null;
       }
       if(Math.hypot(point[0]-a.x,point[2]-a.z)<.16&&Math.abs(point[1]-a.y)<.4){a.pi++;continue;}
       // Give a larger capsule room at walls and furniture corners. Keep the
@@ -16251,7 +16284,7 @@ function facSpiderPursue(F,a,dt){
   if(a.aware&&a.age>=a.chaseAt){
     a.mode='hunt';const elapsed=a.age-a.chaseAt,speed=(elapsed>FSP.fatigue?FSP.tired:FSP.chase)*(.55+.45*clamp(elapsed/.8,0,1));
     if(distance>1.05||!sees){const target=a.target;if(target)facHauntWalk(F,a,target.x,target.y,target.z,speed,dt);}
-    if(sees&&distance<1.15){a.contact=(a.contact||0)+dt;if(a.contact>.2){facDamage(F,pl,FHEALTH.spider);a.stung=false;facHauntSting(F,a);facHauntEnd(F);return;}}else a.contact=0;
+    if(sees&&distance<1.15){a.contact=(a.contact||0)+dt;if(a.contact>.2){a.contact=0;if(facDamage(F,pl,FHEALTH.spider)){a.stung=false;facHauntSting(F,a);facHauntEnd(F);return;}}}else a.contact=0;
   }
   if(a.age>a.life)facHauntEnd(F);
 }
@@ -16275,6 +16308,7 @@ function facHauntTick(F,dt){
     if(F.dm.st==='chase'||F.dm.st==='reveal'||F.stage!=='find'){facHauntEnd(F);return;}
     const oldX=a.x,oldZ=a.z;a.age+=dt;
     if(!a.revealed){
+      if(a.door.opening&&Math.abs(a.door.th)<1.4)facDoorYield(F,a,a.door,a.radius||.26,a.height||1.9,a.spider?.28:.4,dt);
       if(Math.abs(a.door.th)>.5&&facSee(F,pl.x,pl.y+FAC.eye,pl.z,a.x,a.y+a.eye,a.z,false)){a.revealed=true;a.age=0;a.g.visible=true;facHauntSting(F,a);}
       else if(a.age>5){facHauntEnd(F);return;}
     }else if(a.spider){
@@ -20112,17 +20146,17 @@ fixBar();buildTitleLevel();resize();requestAnimationFrame(frame);
   document.getElementById('ro-skip').addEventListener('click',dismiss);
 })();
 </script>
-<script src="assets/horror/spider.js?v=explore-r6-20261027"></script>
-<script src="assets/horror/ghost.js?v=explore-r6-20261027"></script>
-<script src="assets/horror/signs.js?v=explore-r6-20261027"></script>
-<link rel="stylesheet" href="assets/facility-survival.css?v=explore-r6">
-<link rel="stylesheet" href="assets/facility-map.css?v=explore-r6">
-<script src="assets/facility-map.js?v=explore-r6"></script>
-<script src="assets/facility-navigation.js?v=explore-r6"></script>
-<script src="assets/facility-survival.js?v=explore-r6"></script>
-<script src="assets/facility-world.js?v=explore-r6"></script>
-<script src="assets/facility-relay.js?v=explore-r6"></script>
-<script src="assets/facility-coop.js?v=explore-r6"></script>
+<script src="assets/horror/spider.js?v=creature-r7-20261107"></script>
+<script src="assets/horror/ghost.js?v=creature-r7-20261107"></script>
+<script src="assets/horror/signs.js?v=creature-r7-20261107"></script>
+<link rel="stylesheet" href="assets/facility-survival.css?v=creature-r7">
+<link rel="stylesheet" href="assets/facility-map.css?v=creature-r7">
+<script src="assets/facility-map.js?v=creature-r7"></script>
+<script src="assets/facility-navigation.js?v=creature-r7"></script>
+<script src="assets/facility-survival.js?v=creature-r7"></script>
+<script src="assets/facility-world.js?v=creature-r7"></script>
+<script src="assets/facility-relay.js?v=creature-r7"></script>
+<script src="assets/facility-coop.js?v=creature-r7"></script>
 <script id="facility-direct-entry">
 (function(){
   let tries=0,done=false;

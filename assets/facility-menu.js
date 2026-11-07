@@ -1,6 +1,6 @@
 /* Menu entry points preserve the room parameters through both game loaders. */
 function launchFacility(mode,room,playMode){
-  const q=new URLSearchParams({v:'explore-r6-20261027'});
+  const q=new URLSearchParams({v:'creature-r7-20261107'});
   if(playMode==='explore')q.set('mode','explore');
   if(mode){q.set('coop',mode);q.set('room',room);q.set('name',document.getElementById('survivor-name').value.trim().slice(0,18)||'Survivor');}
   document.getElementById('coop-menu').close();

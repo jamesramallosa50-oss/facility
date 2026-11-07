@@ -6,6 +6,11 @@ Play Survival to search three floors, collect one fuse per floor, power the brea
 
 ## This build
 
+- Finished chase routes now join a creature's current position instead of sending it back to the position where an asynchronous search began. This fixes backtracking and repeated direction changes in both the hunter and spider.
+- Physical door leaves respect active creatures even behind cover. A creature blocking the opening arc backs away to let the leaf swing; the spider cannot remotely open a distant door or wait indefinitely inside its sweep.
+- The hunter stops at contact range while keeping its sustained-contact attack. An invulnerable player no longer makes the spider disappear after an unsuccessful attack. Co-op spider poses interpolate between snapshots, and each new encounter resets the native gait.
+- Native creature vertex/texture uploads and route-buffer allocation happen during loading. Spider skeletal animation runs at up to 30 Hz on touch devices, with movement and attack logic still updated every simulation frame.
+
 - A north-up minimap shows the current floor, nearby teammates, stairs and remaining fuse or breaker locations. Tap it (or press **M**) for the full floor plan; use the floor buttons to inspect other levels. The full map pauses a solo run while a co-op room continues.
 - **EXPLORE SOLO** removes all encounters, unlocks the doors and opens the lift. For multiplayer, select **EXPLORE** when creating a co-op room; guests automatically enter the host's mode. There are no fuse objectives in Explore.
 - A room seat is no longer disconnected merely because input paused temporarily. Expired seats can be joined again, and version differences show an explicit reload message.
@@ -72,8 +77,10 @@ The freight lift arrives 24 seconds after all three fuses are installed. Close d
 
 Deploy the repository to Vercel to serve the game and the Node.js function in `api/facility-room.js`. Solo play also works with a local static server, for example `python -m http.server 8000` and `http://localhost:8000/`. A static server alone cannot execute the multiplayer API.
 
-Run `node --test tests/facility-regression.test.cjs` (77 checks). Coverage includes source parsing, geometry, routes, physical door sweeps, native hospital frames/hinges, joystick and stamina behavior, uploaded creature rigs, pursuit/cover rules, health and revives, four-client hosted room packets, transient request recovery, late joins, API boundaries, extension/Backrooms reachability and native outdoor running animation, instanced door transforms/view culling, mobile render buffers/materials, static batching, AI cadence/sleeping, compact packets, empty-room snapshots and model-cache migration.
+Run `node --test tests/facility-regression.test.cjs` (86 checks). Coverage includes source parsing, geometry, routes, physical door sweeps, native hospital frames/hinges, joystick and stamina behavior, uploaded creature rigs, pursuit/cover rules, health and revives, four-client hosted room packets, transient request recovery, late joins, API boundaries, extension/Backrooms reachability and native outdoor running animation, instanced door transforms/view culling, mobile render buffers/materials, static batching, AI cadence/sleeping, compact packets, empty-room snapshots and model-cache migration.
 
 A real hosted-service test also connected four distinct clients, delivered shared world messages to all three guests and rejected a fifth. Browser rendering, actual touch controls and a simultaneous physical-device play session still need playtesting.
 
-The active build is `explore-r6-20261027`. Both entry HTML files and `game-core.html` load this build. The service worker bypasses `/api/` entirely and uses network-first caching for gameplay scripts. Attribution is in [CREDITS.md](CREDITS.md).
+The active build is `creature-r7-20261107`. Both entry HTML files and `game-core.html` load this build. The service worker bypasses `/api/` entirely and uses network-first caching for gameplay scripts. Attribution is in [CREDITS.md](CREDITS.md).
+
+Creature pose tests decode normalized integer skin weights exactly as the GPU does. The old r128 `boneTransform` CPU helper does not normalize those weights, so using it directly on the optimized hunter produces invalid 255-times bounds. The renderer already decodes them correctly.

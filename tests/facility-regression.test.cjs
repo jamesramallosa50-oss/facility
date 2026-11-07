@@ -161,12 +161,12 @@ test('the uploaded spider retains its rig, geometry and animated walk/run poses'
 });
 test('a creature waiting at a closed door requests opening once',()=>{
   const {ctx,A,F}=harness();let opens=0;
-  F.nav={doorOf:[-1,0]};F.doors=[{cx:24,cz:3,hx:24,hz:2.52,y:4,w:.96,a0:Math.PI/2,th:0,tgt:0,lock:false}];
+  F.nav={doorOf:[-1,0],nx:[44,48],nz:[6,6],ny:[4,4]};F.doors=[{cx:24,cz:3,hx:24,hz:2.52,y:4,w:.96,a0:Math.PI/2,nx:-1,nz:0,th:0,tgt:0,lock:false}];
   ctx.facNodeNear=()=>0;ctx.FacilityNavigation.route=(F,a,start,goal,refresh)=>{if(refresh||!a.route)a.route={done:true,path:[0,1],goal:1,delivered:false};return a.route;};ctx.facNP=()=>[24,4,3];
   ctx.facDoorOpen=(F,d)=>{opens++;d.tgt=1.58;return true;};
-  const a={x:22,y:4,z:3,g:new T.Group(),repath:0,path:null,pi:0};
+  const a={x:22.4,y:4,z:3,g:new T.Group(),repath:0,path:null,pi:0};
   for(let i=0;i<60;i++){F.t+=1/60;A.facHauntWalk(F,a,26,4,3,3.9,1/60);}
-  assert.equal(opens,1);assert.equal(a.x,22);
+  assert.equal(opens,1);assert.equal(a.x,22.4);
 });
 test('spider proximity scares respect walls and floor height',()=>{
   const {ctx,A,F}=harness();A.facHauntInit(F);
@@ -411,7 +411,7 @@ test('room parameters survive the game loader and asset updates invalidate old g
   const script=[...fs.readFileSync(path.join(root,'game.html'),'utf8').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)][0][1];
   vm.runInNewContext(script,{URL,location,document:{getElementById:()=>link}});const u=new URL(location.redirect);
   assert.equal(u.searchParams.get('room'),'ABC234');assert.equal(u.searchParams.get('coop'),'join');assert.equal(u.searchParams.get('name'),'Kai');assert.equal(u.searchParams.get('facility'),'1');
-  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-explore-r6-20261027'));assert(!sw.includes("pathname.includes('/assets/')"));
+  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-creature-r7-20261107'));assert(!sw.includes("pathname.includes('/assets/')"));
   const code=fs.readFileSync(path.join(root,'index.html'),'utf8');assert(code.includes('PLAY CO-OP'));assert(code.includes('facility-menu.js'));assert(html.includes('assets/facility-coop.js'));
 });
 
@@ -817,4 +817,75 @@ test('menu creates explore rooms and joiners use the host mode',()=>{
   vm.runInNewContext(fs.readFileSync(path.join(root,'assets/facility-menu.js'),'utf8'),c);controls['host-room'].onclick();
   let q=new URLSearchParams(controls.game.src.split('?')[1]);assert.equal(q.get('coop'),'host');assert.equal(q.get('mode'),'explore');assert.equal(q.get('name'),'Kai');assert.equal(q.get('room').length,6);
   controls['room-code'].value='ABC234';controls['join-room'].onsubmit({preventDefault(){}});q=new URLSearchParams(controls.game.src.split('?')[1]);assert.equal(q.get('coop'),'join');assert.equal(q.get('room'),'ABC234');assert.equal(q.get('mode'),null);
+});
+
+test('late chase routes join the current position instead of pulling hunter and spider backward',()=>{
+  const {ctx,A,F}=harness(),path=[];for(let z=10.25;z<30;z+=.5){const n=A.facNodeNear(F,47.75,4,z);if(path.at(-1)!==n)path.push(n);}
+  ctx.facHauntClear=()=>false;ctx.facWalkLine=()=>true;
+  ctx.FacilityNavigation.route=()=>({done:true,delivered:false,path,goal:path.at(-1)});
+  Object.assign(F.dm,{x:47.75,y:4,z:20.25,g:new T.Group(),st:'chase',path,pi:20,repT:0,lineT:0,bash:null});
+  A.facDmGo(F,47.75,4,30,4.9,1/60);assert(F.dm.z>=20.25,'Hunter followed the stale start of an asynchronous route');
+  const a={x:47.75,y:4,z:20.25,g:new T.Group(),radius:.42,height:.78,spider:{},path,pi:20};
+  A.facHauntWalk(F,a,47.75,4,30,4.65,1/60);assert(a.z>=20.25,'Spider followed the stale start of an asynchronous route');
+});
+
+test('a swinging door respects a hunter behind cover and an active spider body',()=>{
+  for(const kind of ['hunter','spider']){
+    const {A,F}=harness();F.W.bh=new Map();F.pl.x=10;F.pl.z=8;
+    const d={hx:56,hz:22,y:4,w:1.46,a0:0,th:.7,tgt:0,om:-3,stiff:16,damp:6,mesh:{rotation:{y:0}}};F.doors=[d];
+    const body={x:56.9,y:4,z:kind==='hunter'?22.22:22.1,on:true,vis:false,radius:.42};
+    if(kind==='hunter')Object.assign(F.dm,body);else F.haunt={active:body};
+    const before=d.th;A.facDoorsTick(F,.05);assert(d.th>=before-.001,'Door swept through '+kind+' when its body was not visible');
+  }
+});
+
+test('spider contact during invulnerability does not remove the encounter or replay the scare',()=>{
+  const {ctx,A,F}=harness();A.facHauntInit(F);ctx.facSee=()=>true;let scares=0;ctx.facHauntSting=()=>{scares++;};
+  const a=F.haunt.actors.find(a=>a.spider);Object.assign(a,{x:F.pl.x,y:F.pl.y,z:F.pl.z-.9,age:2,aware:true,chaseAt:0,lastSeen:2,reaction:0,life:28,contact:.19});F.haunt.active=a;F.pl.invulnUntil=F.t+1;
+  A.facSpiderPursue(F,a,.05);assert(F.haunt.active===a,'An unsuccessful hit must not despawn the spider');assert.equal(scares,0);
+  F.t+=2;a.contact=.19;A.facSpiderPursue(F,a,.05);assert.equal(F.pl.hp,78);assert.equal(F.haunt.active,null);
+});
+
+test('hunter stops at attack range instead of running its body through the player camera',()=>{
+  const {ctx,A,F}=harness();Object.assign(F.pl,{x:47.75,y:4,z:22});
+  Object.assign(F.dm,{x:47.75,y:4,z:20,g:new T.Group(),on:true,vis:true,st:'chase',face:0,stT:2,t:0,mem:{x:47.75,y:4,z:22},lastVisual:F.t,safeUntil:0});
+  ctx.facDmSee=()=>1;ctx.facDmHear=()=>null;ctx.facDmBody=()=>{};ctx.facSee=()=>true;
+  let nearest=99;for(let i=0;i<120;i++){F.t+=1/60;A.facDemonTick(F,1/60);nearest=Math.min(nearest,Math.hypot(F.dm.x-F.pl.x,F.dm.z-F.pl.z));}
+  assert(nearest>=.69,'The chase must retain physical space before the camera');assert(nearest<.82,'The existing sustained-contact attack must still work');assert(F.pl.hp<100);
+});
+
+test('native creature GPU warmup restores hidden actors and render targets even when it fails',()=>{
+  const {ctx,F}=harness();F.dm.g=new T.Group();F.dm.g.visible=false;F.haunt={actors:[{g:new T.Group()}]};F.runner={g:new T.Group()};F.runner.g.visible=false;
+  const previous={},initial=F.haunt.actors[0].g.visible;let active=previous,disposed=false,calls=0;
+  ctx.renderer={autoClear:false,getRenderTarget:()=>active,setRenderTarget(t){active=t;},render(){calls++;assert(active!==previous);assert(F.dm.g.visible&&F.haunt.actors[0].g.visible&&F.runner.g.visible);active.addEventListener('dispose',()=>{disposed=true;});throw Error('Test render failure');}};
+  vm.runInContext(section('function facWarmCreatures(F){','/* ---------- things you pick up'),ctx);
+  assert.throws(()=>ctx.facWarmCreatures(F),/Test render failure/);assert.equal(active,previous);assert(disposed);assert.equal(ctx.renderer.autoClear,false);assert(!F.dm.g.visible&&!F.runner.g.visible);assert.equal(F.haunt.actors[0].g.visible,initial);
+  F.explore=true;ctx.facWarmCreatures(F);assert.equal(calls,1,'Explore must skip unused monster uploads');
+});
+
+test('spider animation on phones samples at thirty hertz without losing elapsed time',()=>{
+  const {ctx}=harness();ctx.matchMedia=()=>({matches:true});const S=ctx.FacilitySpider,actor=S.createActor();let samples=0,elapsed=0;const update=actor.mixer.update.bind(actor.mixer);
+  actor.mixer.update=dt=>{samples++;elapsed+=dt;update(dt);};for(let i=0;i<120;i++)S.tick(actor,4.65,1/60);
+  assert.equal(samples,60);assert(Math.abs(elapsed-2)<1e-6);S.release(actor);
+});
+
+test('co-op spider poses interpolate between snapshots and reset on a new encounter',()=>{
+  const {ctx,A,F}=coopWorld(harness(),'join');A.facHauntInit(F);F.coop.world={dm:{x:20,y:4,z:3,face:0,on:false,st:'away',spd:0},haunt:{kind:'crawler',serial:1,x:40,y:4,z:30,face:0,speed:4.65,mode:'hunt',revealed:true,age:1}};
+  let resets=0;const reset=ctx.FacilitySpider.reset;ctx.FacilitySpider.reset=a=>{resets++;reset(a);};ctx.facNetVisuals(F,1/60);const a=F.haunt.active;assert.equal(a.x,40);
+  F.coop.world.haunt.x=41;ctx.facNetVisuals(F,1/60);assert(a.x>40&&a.x<41,'Network poses must not jump at twelve frames per second');assert.equal(resets,1);
+  F.coop.world.haunt.serial=2;F.coop.world.haunt.x=50;ctx.facNetVisuals(F,1/60);assert.equal(a.x,50);assert.equal(resets,2);A.facHauntDispose(F);
+});
+
+test('route buffers can be reserved during loading and are reused when a chase starts',()=>{
+  const {ctx,A,F}=harness(),owner={},P=ctx.FacilityNavigation.reserve(F,owner),heap=P.heap,a=A.facNodeNear(F,11,4,8),b=A.facNodeNear(F,47.75,4,50);
+  F.t+=.1;ctx.FacilityNavigation.route(F,owner,a,b,true);assert.equal(owner.routeBuffers,P);assert.equal(owner.routeBuffers.heap,heap);
+});
+
+test('rendered hunter poses remain the correct physical size with normalized skin weights',async()=>{
+  const {skinPoseBounds}=require('./helpers/skin-pose.cjs');
+  for(const name of ['demon-runtime','demon-mobile']){
+    const gl=await parseSpider(T,path.join(root,'assets/horror/'+name+'.glb'),path.join(root,'assets/horror/gltf.js')),body=new T.Group();body.scale.setScalar(1.3);body.position.set(40,4,20);body.add(gl.scene);
+    const mix=new T.AnimationMixer(gl.scene);mix.clipAction(gl.animations[0]).play();
+    for(const t of [0,.1,.25,.4]){mix.setTime(t);const bounds=skinPoseBounds(T,gl.scene),size=bounds.getSize(new T.Vector3());assert(size.y>1.7&&size.y<2.2,'Rendered skin must stay within the hunter capsule height');assert(size.x<1.2&&size.z<2.2);assert(bounds.min.y>3.8&&bounds.max.y<6.2);}
+  }
 });
