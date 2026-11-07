@@ -1,6 +1,6 @@
 /* Hosted HTTPS co-op. Only the host simulates the world.
    Guests send movement and interaction requests; snapshots own all shared state. */
-const FNET={version:2,build:'creature-r7',prefix:'facility-v1-',hz:12,max:4,timeout:25000};
+const FNET={version:2,build:'horror-r8',prefix:'facility-v1-',hz:12,max:4,timeout:25000};
 function facNetName(v){return String(v||'Survivor').replace(/[^\p{L}\p{N} _-]/gu,'').trim().slice(0,18)||'Survivor';}
 function facNetCode(v){return String(v||'').toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,6);}
 function facNetSend(conn,data,essential=false){
@@ -172,8 +172,8 @@ function facNetSnapshot(F){
   const C=F.coop,dm=F.dm,a=F.haunt?.active,q=facNetRound;
   return{version:FNET.version,build:FNET.build,room:C.room,mode:F.explore?'explore':'survival',epoch:C.epoch,t:q(F.t),stage:F.stage,held:F.held,fuses:F.fuses,breaker:F.brk.n,powerT:q(F.powerT||0),
     lift:{open:q(F.lift.open),want:F.lift.want,arrive:q(F.lift.arrive)},power:q(F.U.uPow.value),emergency:q(F.U.uEmg.value),outcome:C.outcome,
-    players:[{...facNetPose(F.pl),id:C.id,name:C.name,hp:q(F.pl.hp),downed:F.pl.downed,hit:F.pl.hit||0,ack:0,loading:false},
-      ...[...C.players.values()].map(p=>({...facNetPose(p),id:p.netId,name:p.name,hp:q(p.hp),downed:p.downed,hit:p.hit||0,ack:p.ack,batteryPicks:p.batteryPicks||0,loading:p.loading,offline:!!p.offline}))],
+    players:[{...facNetPose(F.pl),id:C.id,name:C.name,hp:q(F.pl.hp),downed:F.pl.downed,hit:F.pl.hit||0,attack:F.pl.attack?.map(q),ack:0,loading:false},
+      ...[...C.players.values()].map(p=>({...facNetPose(p),id:p.netId,name:p.name,hp:q(p.hp),downed:p.downed,hit:p.hit||0,attack:p.attack?.map(q),ack:p.ack,batteryPicks:p.batteryPicks||0,loading:p.loading,offline:!!p.offline}))],
     doors:F.doors.map(d=>[q(d.th),q(d.tgt),!!d.lock]),fuseItems:F.fz.map(f=>[q(f.x),q(f.y),q(f.z),!!f.got]),batteries:F.bats.map(b=>[q(b.x),q(b.y),q(b.z),!!b.got]),
     dm:{x:q(dm.x),y:q(dm.y),z:q(dm.z),face:q(dm.face),on:dm.on,st:dm.st,spd:q(dm.actualSpeed||0)},
     runner:F.runner?{x:q(F.runner.x),y:q(F.runner.y),z:q(F.runner.z),face:q(F.runner.face),speed:q(F.runner.speed),mode:F.runner.mode}:null,
@@ -198,7 +198,7 @@ function facNetWorld(F,m){
   if(first||wasDown&&!own.downed||Math.hypot(F.pl.x-own.x,F.pl.z-own.z)>3){Object.assign(F.pl,facNetPose(own));F.pl.vx=F.pl.vz=0;F.camY=own.y+FAC.eye;}
   F.pl.hp=own.hp;F.pl.downed=own.downed;F.pl.hit=own.hit;
   if((own.batteryPicks||0)>(C.batteryPicks||0)){F.pl.bat=Math.min(1,F.pl.bat+((own.batteryPicks||0)-(C.batteryPicks||0))*.5);facSndPick(F,.6);facTip(F,'Battery +50%',1.6);}C.batteryPicks=own.batteryPicks||0;
-  if(own.hit>hit)facHitFeedback(F,Math.max(0,(C.lastHp??100)-own.hp));C.lastHp=own.hp;
+  if(own.hit>hit)facHitFeedback(F,Math.max(0,(C.lastHp??100)-own.hp),own.attack);C.lastHp=own.hp;
   C.actions=C.actions.filter(a=>a.id>own.ack);
   const alive=new Set();
   for(const p of m.players){

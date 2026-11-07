@@ -10,6 +10,7 @@ function facAuthority(F){return !F.coop||F.coop.host;}
 function facExploreApply(F,enabled){
   F.explore=!!enabled;
   if(!F.explore)return;
+  F.attackScare=null;
   for(const door of F.doors||[])door.lock=false;
   if(F.dm){F.dm.on=false;F.dm.vis=false;F.dm.st='away';F.dm.route=null;F.dm.path=null;if(F.dm.g)F.dm.g.visible=false;}
   if(F.haunt?.active)facHauntEnd(F);
@@ -37,16 +38,29 @@ function facHuntTarget(F,actor=F.dm,spider=false){
   best=best||list.find(p=>(p.netId||'local')===actor.targetId)||F.pl;
   if(!facAlive(best))best=list[0];actor.targetId=best.netId||'local';actor.huntPick=best;return best;
 }
-function facHitFeedback(F,amount){
+function facHitFeedback(F,amount,attack){
   F.shake=Math.max(F.shake||0,.5);F.pl.fear=Math.max(F.pl.fear||0,.55);
   if(F.post&&meta.flash!==false)F.post.mat.uniforms.uHurt.value=.4;
-  facSting(F,.35);facTip(F,'-'+amount+' health · sprint away!',2);
+  if(Array.isArray(attack)&&attack.length===3&&attack.every(Number.isFinite)){
+    F.attackScare={target:attack.slice(),until:F.t+.3};
+    try{hzScream();F.scareSoundAt=F.t;}catch(_){}
+  }else facSting(F,.35);
+  facTip(F,'-'+amount+' health · sprint away!',2);
 }
-function facDamage(F,p,amount){
+function facScareView(F,dt){
+  const scare=F.attackScare;if(!scare)return;
+  if(HZ.dead||HZ.won||F.t>=scare.until){F.attackScare=null;return;}
+  const pl=F.pl,[x,y,z]=scare.target,dx=x-pl.x,dz=z-pl.z,distance=Math.hypot(dx,dz);
+  if(distance<.05)return;
+  const yaw=Math.atan2(-dx,-dz),turn=Math.atan2(Math.sin(yaw-pl.yaw),Math.cos(yaw-pl.yaw)),k=1-Math.exp(-20*dt);
+  pl.yaw+=turn*k;pl.pitch+=(clamp(Math.atan2(y-F.camY,distance),-1.1,1.1)-pl.pitch)*k;
+}
+function facDamage(F,p,amount,actor){
   if(F.explore||!facAuthority(F)||!facAlive(p)||F.t<(p.invulnUntil||0)||HZ.dead||HZ.won)return false;
   p.hp=Math.max(0,(p.hp==null?100:p.hp)-amount);p.lastHit=F.t;p.invulnUntil=F.t+FHEALTH.invulnerable;
   p.hit=(p.hit||0)+1;
-  if(p===F.pl)facHitFeedback(F,amount);
+  p.attack=actor?[actor.x,actor.y+(actor.eye??1.65),actor.z]:null;
+  if(p===F.pl)facHitFeedback(F,amount,p.attack);
   if(p.hp===0){
     if(F.coop){p.downed=true;p.vx=p.vz=0;p.crouch=true;}
     else facDie(F);

@@ -37,10 +37,27 @@
     if(Number.isFinite(lowest))asset.visual.position.y+=asset.sole-lowest;
     asset.visual.updateWorldMatrix(false,true);
   }
+  function trimRestTracks(root,clips){
+    // The export keys position, rotation and scale on every joint. Tracks that
+    // never differ from the imported bind pose do no animation work.
+    for(const clip of clips){clip.tracks=clip.tracks.filter(track=>{
+      const binding=T.PropertyBinding.parseTrackName(track.name);
+      if(binding.objectName||binding.propertyIndex!==undefined||!['position','quaternion','scale'].includes(binding.propertyName))return true;
+      const node=T.PropertyBinding.findNode(root,binding.nodeName),property=node?.[binding.propertyName];if(!property)return true;
+      const rest=property.toArray(),size=track.getValueSize();if(rest.length!==size)return true;
+      for(let i=0;i<track.values.length;i+=size){
+        let same=true,opposite=binding.propertyName==='quaternion';
+        for(let j=0;j<size;j++){same=same&&Math.abs(track.values[i+j]-rest[j])<1e-6;opposite=opposite&&Math.abs(track.values[i+j]+rest[j])<1e-6;}
+        if(!same&&!opposite)return true;
+      }
+      return false;
+    });clip.optimize();}
+  }
   function prepare(gl,anisotropy){
     if(!gl||!gl.scene)throw new Error('Spider model has no scene');
     const root=gl.scene,walk=gl.animations.find(a=>/Spider walking$/i.test(a.name)),run=gl.animations.find(a=>/Spider running$/i.test(a.name));
     if(!walk||!run)throw new Error('Spider walking/running animation is missing');
+    trimRestTracks(root,[walk,run]);
     const mixer=new T.AnimationMixer(root),bounds=new T.Box3(),feet=[],tmp=new T.Vector3();let sole=0;
     root.traverse(o=>{if(o.isBone&&/LegSegmentF.*_end_/i.test(o.name))feet.push(o);});
     // Skinned rest bounds in this export are upright and are unsuitable for
@@ -63,7 +80,7 @@
       o.frustumCulled=false;o.castShadow=false;o.receiveShadow=false;
       o.material=Array.isArray(o.material)?o.material.map(m=>material(m,!!o.isSkinnedMesh)):material(o.material,!!o.isSkinnedMesh);
       for(const m of Array.isArray(o.material)?o.material:[o.material]){
-        m.skinning=!!o.isSkinnedMesh;m.side=T.DoubleSide;
+        m.skinning=!!o.isSkinnedMesh;
         if(m.emissive){m.emissive.setHex(0x17130d);m.emissiveMap=m.map||null;m.emissiveIntensity=.32;}
         if(m.roughness!=null)m.roughness=Math.max(.55,m.roughness);
         for(const key of ['map','normalMap','roughnessMap','metalnessMap']){
@@ -127,5 +144,5 @@
     if(asset&&asset.owner===actor){actor.mixer.uncacheRoot(asset.root);if(asset.visual.parent)asset.visual.parent.remove(asset.visual);asset.owner=null;}
     if(actor.visual.parent)actor.visual.parent.remove(actor.visual);
   }
-  global.FacilitySpider={load,prepare,createActor,reset,tick,release,poseBounds,material};
+  global.FacilitySpider={load,prepare,createActor,reset,tick,release,poseBounds,material,trimRestTracks};
 })(typeof window!=='undefined'?window:globalThis);

@@ -6,6 +6,13 @@ Play Survival to search three floors, collect one fuse per floor, power the brea
 
 ## This build
 
+- Cold launches initialize the shared noise buffer before creating Facility sound. Proximity radio, hunter breaths/steps and scare effects no longer depend on a prior UI sound. Pointer/touch input wakes suspended audio before control handlers consume the event.
+- Confirmed close contact plays the recorded scare and briefly turns the camera toward the attacker. Four sustained hunter hits still kill in Survival; co-op forwards each hit scare only to the struck player. The final hunter approach uses capsule movement inside the attack range instead of a rounded navigation stop point.
+- The spider stays active after biting, pauses briefly, then can attack again. Damage cooldowns, cover and sprint escape remain in effect. This fixes the former single-bite encounter whose damage always regenerated before another spider could appear.
+- Spider clips drop 225 redundant bind-pose tracks (378 → 153 across walk/run), with every native joint checked at multiple clip times. The opaque spider retains its imported front-face culling. Spatial audio reuses its graph, updates at ten hertz and replaces automation envelopes instead of accumulating them. Spider proximity has positional skittering that muffles behind cover.
+- Phone Auto reserves a 352-line render budget within eight metres of either creature and restores the normal budget beyond eleven metres, reducing close-view pixel work by about 46% from the normal 480-line baseline. Hysteresis avoids repeated framebuffer resizing. These are workload reductions; actual phone FPS remains unverified.
+- Creature scripts now refresh through the gameplay cache policy; only model, texture and sound files use persistent asset caching.
+
 - Finished chase routes now join a creature's current position instead of sending it back to the position where an asynchronous search began. This fixes backtracking and repeated direction changes in both the hunter and spider.
 - Physical door leaves respect active creatures even behind cover. A creature blocking the opening arc backs away to let the leaf swing; the spider cannot remotely open a distant door or wait indefinitely inside its sweep.
 - The hunter stops at contact range while keeping its sustained-contact attack. An invulnerable player no longer makes the spider disappear after an unsuccessful attack. Co-op spider poses interpolate between snapshots, and each new encounter resets the native gait.
@@ -77,10 +84,10 @@ The freight lift arrives 24 seconds after all three fuses are installed. Close d
 
 Deploy the repository to Vercel to serve the game and the Node.js function in `api/facility-room.js`. Solo play also works with a local static server, for example `python -m http.server 8000` and `http://localhost:8000/`. A static server alone cannot execute the multiplayer API.
 
-Run `node --test tests/facility-regression.test.cjs` (86 checks). Coverage includes source parsing, geometry, routes, physical door sweeps, native hospital frames/hinges, joystick and stamina behavior, uploaded creature rigs, pursuit/cover rules, health and revives, four-client hosted room packets, transient request recovery, late joins, API boundaries, extension/Backrooms reachability and native outdoor running animation, instanced door transforms/view culling, mobile render buffers/materials, static batching, AI cadence/sleeping, compact packets, empty-room snapshots and model-cache migration.
+Run `node --test tests/facility-regression.test.cjs` (95 checks). Coverage includes source parsing, geometry, routes, physical door sweeps, native hospital frames/hinges, joystick and stamina behavior, uploaded creature rigs, pursuit/cover rules, health and revives, four-client hosted room packets, transient request recovery, late joins, API boundaries, extension/Backrooms reachability and native outdoor running animation, instanced door transforms/view culling, mobile render buffers/materials, static batching, AI cadence/sleeping, compact packets, empty-room snapshots and model-cache migration.
 
 A real hosted-service test also connected four distinct clients, delivered shared world messages to all three guests and rejected a fifth. Browser rendering, actual touch controls and a simultaneous physical-device play session still need playtesting.
 
-The active build is `creature-r7-20261107`. Both entry HTML files and `game-core.html` load this build. The service worker bypasses `/api/` entirely and uses network-first caching for gameplay scripts. Attribution is in [CREDITS.md](CREDITS.md).
+The active build is `horror-r8-20261107`. Both entry HTML files and `game-core.html` load this build. The service worker bypasses `/api/` entirely and uses network-first caching for gameplay scripts. Attribution is in [CREDITS.md](CREDITS.md).
 
 Creature pose tests decode normalized integer skin weights exactly as the GPU does. The old r128 `boneTransform` CPU helper does not normalize those weights, so using it directly on the optimized hunter produces invalid 255-times bounds. The renderer already decodes them correctly.

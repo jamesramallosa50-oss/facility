@@ -53,6 +53,118 @@ function harness(buildGeometry=false){
   return{ctx,A,F,W};
 }
 const shared=harness(true);
+function audioHarness(h){
+  const {AudioContext}=require('./helpers/audio-context.cjs'),{ctx}=h;
+  Object.assign(ctx,{AudioContext,MUS:{on:false,vol:.5},setInterval:()=>0,mzInit(){},mzAir(){},audioWatch(){},uiClickSnd(){},musTick(){}});
+  vm.runInContext(section('let AC=null,master=null,muted=false,nbuf=null;','/* music: a small step sequencer.')+
+    section('function hzS(fn)','/* the horror soundscape (both modes)')+
+    section('function facAudioInit(F)','/* ---------- the camera:'),ctx);
+  ctx.initAudio();vm.runInContext('globalThis.audioContext=AC;HZJS={duration:1.6};',ctx);
+  return h;
+}
+function nativeDeath(h){
+  const {ctx,F}=h;
+  ctx.$=()=>({classList:{add(){}},style:{}});ctx.hsClock=()=>'';
+  vm.runInContext(section('function facDie(F)','/* ---------- out ---------- */'),ctx);
+  F.hand={g:new T.Group()};F.beam=new T.Group();F.spot=new T.SpotLight();
+  Object.assign(F.U,{uCam:{value:new T.Vector3()},uLP:{value:new T.Vector3()},uLD:{value:new T.Vector3()},uLOn:{value:1}});
+}
+
+test('a fresh launch creates proximity sound before any UI click or other sound effect',()=>{
+  const {ctx,F}=audioHarness(harness());ctx.facAudioInit(F);
+  assert(F.au,'Cold launch must not depend on a sound effect creating nbuf first');
+  assert.equal(ctx.audioContext.started.length,5);const original=F.au;ctx.facAudioInit(F);assert(F.au===original,'Audio init must be idempotent');
+  F.dm.on=true;F.dm.x=F.pl.x+2;F.dm.y=F.pl.y;F.dm.z=F.pl.z;ctx.facAudio(F,.1);
+  assert(F.au.dOut.gain.target>1);assert(F.au.radio.gain.target>0);assert(F.pl.fear>0);
+  const far=F.au.radio.gain.target;F.dm.x+=30;ctx.facAudio(F,.11);assert(F.au.radio.gain.target<far);
+  ctx.facAudioStop(F);assert.equal(F.au,null);assert(ctx.audioContext.started.every(s=>s.stopped));
+});
+
+test('long close encounters bound sound automation and spatial visibility work',()=>{
+  const {ctx,F}=audioHarness(harness());ctx.facAudioInit(F);let rays=0;ctx.facSee=()=>{rays++;return true;};
+  Object.assign(F.dm,{x:F.pl.x+1,y:F.pl.y,z:F.pl.z,on:true,st:'chase'});
+  const startNodes=ctx.audioContext.nodes.length;
+  for(let i=0;i<60*60;i++){F.t+=1/60;ctx.audioContext.currentTime+=1/60;ctx.facAudio(F,1/60);}
+  assert(rays<=601,'Spatial sound must not raycast every rendered frame');assert.equal(ctx.audioContext.nodes.length,startNodes,'Distance updates must reuse their sound graph');
+  for(const node of ctx.audioContext.nodes)for(const p of ['gain','frequency','Q','pan'])assert(node[p].events.length<=2,'Automation events must not grow throughout a chase');
+});
+
+test('spider proximity grows nearby, respects cover, and becomes silent when removed',()=>{
+  const {ctx,A,F}=audioHarness(harness());A.facHauntInit(F);ctx.facSee=()=>true;ctx.facAudioInit(F);
+  const a=F.haunt.actors.find(a=>a.spider);Object.assign(a,{x:F.pl.x+2,y:F.pl.y,z:F.pl.z,revealed:true,on:true,aware:true});F.haunt.active=a;
+  ctx.facAudio(F,.11);const near=F.au.spider.gain.target;assert(near>0);
+  ctx.facSee=()=>false;ctx.facAudio(F,.11);assert(F.au.spider.gain.target<near,'A wall must muffle skittering');
+  A.facHauntEnd(F);ctx.facAudio(F,.11);assert.equal(F.au.spider.gain.target,0);A.facHauntDispose(F);
+});
+
+test('real hunter movement and vision reach lethal contact and run the death jumpscare',async()=>{
+  const h=audioHarness(harness(true)),{ctx,A,F}=h;A.facLightsPrep(F.W);nativeDeath(h);ctx.facAudioInit(F);
+  vm.runInContext(section('function hzIdleClip(run)','/* ---------- materials ---------- */'),ctx);
+  const gl=await parseSpider(T,path.join(root,'assets/horror/demon-mobile.glb'),path.join(root,'assets/horror/gltf.js'));
+  Object.assign(F.pl,{x:47.75,y:4,z:22});F.camY=5.62;F.t=50;
+  const g=new T.Group();g.scale.setScalar(1.3);g.add(gl.scene);F.scene.add(g);const mix=new T.AnimationMixer(gl.scene);
+  Object.assign(F.dm,{g,mix,run:mix.clipAction(gl.animations[0]).play(),idle:mix.clipAction(ctx.hzIdleClip(gl.animations[0])).play(),rw:0,x:47.75,y:4,z:19,on:true,vis:true,st:'chase',stT:2,t:0,face:0,mem:{x:47.75,y:4,z:22},lastVisual:50,safeUntil:0});
+  let nearest=99;
+  for(let i=0;i<480&&!ctx.HZ.dead;i++){F.t+=1/60;ctx.audioContext.currentTime+=1/60;A.facDemonTick(F,1/60);ctx.facAudio(F,1/60);ctx.facScareView(F,1/60);nearest=Math.min(nearest,Math.hypot(F.dm.x-F.pl.x,F.dm.z-F.pl.z));}
+  assert.equal(F.pl.hp,0);assert(ctx.HZ.dead);assert.equal(F.dm.st,'kill');assert(F.dm.g.visible);assert(nearest>=A.FDM.stop-.01);
+  assert.equal(ctx.audioContext.started.filter(s=>s.buffer?.duration===1.6).length,4,'Each hit must play once; the lethal hit must not double its voices');
+  ctx.facDeadTick(F,1/60);assert(F.deadT>0);assert(!F.hand.g.visible,'The death camera must show the creature');
+});
+
+test('a spider stays dangerous after a bite and can kill a stationary solo player',()=>{
+  const h=audioHarness(harness(true)),{ctx,A,F}=h;nativeDeath(h);A.facHauntInit(F);
+  Object.assign(F.pl,{x:47.75,y:4,z:22});F.camY=5.62;F.t=50;
+  Object.assign(F.dm,{g:new T.Group(),st:'prowl',x:2,y:4,z:2});
+  assert(A.facHauntSpawn(F,'crawler',[47.75,4,19],'hunt'));const a=F.haunt.active;
+  for(let i=0;i<60*14&&!ctx.HZ.dead;i++){F.t+=1/60;A.facHauntTick(F,1/60);A.facHealthTick(F,1/60);}
+  assert(F.pl.hit>=5);assert.equal(F.pl.hp,0);assert(ctx.HZ.dead);assert.equal(F.dm.st,'kill');assert(a.age<14);
+});
+
+test('spider track trimming preserves every native joint while reducing animation bindings',async()=>{
+  const {ctx}=harness(),file=path.join(root,'assets/horror/wolf-spider.glb'),loader=path.join(root,'assets/horror/gltf.js');
+  const original=await parseSpider(T,file,loader),trimmed=await parseSpider(T,file,loader),before=trimmed.animations.reduce((n,a)=>n+a.tracks.length,0);
+  ctx.FacilitySpider.trimRestTracks(trimmed.scene,trimmed.animations);
+  const after=trimmed.animations.reduce((n,a)=>n+a.tracks.length,0);assert(after<before*.6,'Redundant rest transforms should not run each frame');
+  for(let c=0;c<2;c++){
+    const a=new T.AnimationMixer(original.scene),b=new T.AnimationMixer(trimmed.scene);a.clipAction(original.animations[c]).play();b.clipAction(trimmed.animations[c]).play();
+    for(const fraction of [0,.1,.35,.7,.99]){a.setTime(original.animations[c].duration*fraction);b.setTime(trimmed.animations[c].duration*fraction);
+      original.scene.traverse(node=>{if(!node.isBone)return;const other=trimmed.scene.getObjectByName(node.name);assert(node.position.distanceTo(other.position)<1e-5,node.name);assert(node.quaternion.angleTo(other.quaternion)<.001,node.name);assert(node.scale.distanceTo(other.scale)<1e-5,node.name);});
+    }
+    a.stopAllAction();b.stopAllAction();
+  }
+  console.info('Spider animation bindings:',before,'→',after);
+});
+
+test('co-op hit feedback reaches only the bitten player and is not replayed by duplicate snapshots',()=>{
+  const host=coopWorld(harness(),'host'),guest=coopWorld(audioHarness(harness()),'join');
+  host.F.coop.id='host';guest.F.coop.id='guest';
+  const remote={...host.F.pl,netId:guest.F.coop.id,name:'Guest',hp:100,hit:0,downed:false,loading:false};host.F.coop.players.set(remote.netId,remote);
+  const actor={x:remote.x+.7,y:remote.y,z:remote.z,eye:1.65};
+  assert(host.A.facDamage(host.F,remote,28,actor));assert.equal(host.F.pl.hp,100);assert(!host.F.attackScare,'The host must not see a guest hit scare');
+  const packet=host.A.facNetSnapshot(host.F);guest.A.facNetWorld(guest.F,packet);
+  assert.equal(guest.F.pl.hp,72);assert(guest.F.attackScare);const played=guest.ctx.audioContext.started.length;assert(played>0);
+  guest.A.facNetWorld(guest.F,packet);assert.equal(guest.ctx.audioContext.started.length,played,'Repeated world packets must not replay the jumpscare');
+});
+
+test('creature scripts refresh while downloaded models remain reusable across updates',()=>{
+  const code=fs.readFileSync(path.join(root,'sw.js'),'utf8'),ctx={URL,self:{addEventListener(){}}};vm.createContext(ctx);
+  vm.runInContext(code+';globalThis.modelPathCheck=modelPath;',ctx);
+  assert(ctx.modelPathCheck('https://facility.test/assets/horror/wolf-spider.glb?v=1'));
+  assert(!ctx.modelPathCheck('https://facility.test/assets/horror/spider.js?v=2'));
+  assert(!ctx.modelPathCheck('https://facility.test/assets/horror/ghost.js'));
+});
+
+test('phone Auto reserves encounter GPU headroom without resizing at every range crossing',()=>{
+  const {ctx,F}=harness();ctx.isTouch=true;ctx.qMode=()=> 'auto';ctx.qFactor=()=>1;ctx.devicePixelRatio=2;ctx.gameEl={clientWidth:1000,clientHeight:600};
+  let sizes=0;ctx.renderer={domElement:{width:0,height:0},setSize(w,h){sizes++;this.domElement.width=w;this.domElement.height=h;}};
+  vm.runInContext(section('function facSize(F)','function facTick(dt)'),ctx);
+  ctx.facSize(F);assert.equal(ctx.renderer.domElement.height,480);
+  Object.assign(F.dm,{on:true,x:F.pl.x+7,y:F.pl.y,z:F.pl.z});ctx.facSize(F);assert.equal(ctx.renderer.domElement.height,352);
+  for(let i=0;i<100;i++){F.dm.x=F.pl.x+(i%2?7.9:8.1);ctx.facSize(F);}assert.equal(sizes,2,'Keep the close budget through threshold jitter');
+  F.dm.x=F.pl.x+12;ctx.facSize(F);assert.equal(ctx.renderer.domElement.height,480);
+  F.dm.on=false;F.haunt={active:{on:true,x:F.pl.x+3,y:F.pl.y,z:F.pl.z}};ctx.facSize(F);assert.equal(ctx.renderer.domElement.height,352);
+  F.explore=true;ctx.facSize(F);assert.equal(ctx.renderer.domElement.height,480,'Explore must not carry an old encounter budget');
+});
 test('every inline script parses, including launch entry points',()=>{
   for(const file of ['facility-navigation.js','facility-survival.js','facility-coop.js','facility-menu.js','facility-world.js','facility-relay.js','facility-map.js'])new vm.Script(fs.readFileSync(path.join(root,'assets',file),'utf8'),{filename:file});
   for(const [name,code] of [['spider',spiderRuntime],['ghost',ghostRuntime],['signs',signRuntime]])new vm.Script(code,{filename:'assets/horror/'+name+'.js'});
@@ -411,7 +523,7 @@ test('room parameters survive the game loader and asset updates invalidate old g
   const script=[...fs.readFileSync(path.join(root,'game.html'),'utf8').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)][0][1];
   vm.runInNewContext(script,{URL,location,document:{getElementById:()=>link}});const u=new URL(location.redirect);
   assert.equal(u.searchParams.get('room'),'ABC234');assert.equal(u.searchParams.get('coop'),'join');assert.equal(u.searchParams.get('name'),'Kai');assert.equal(u.searchParams.get('facility'),'1');
-  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-creature-r7-20261107'));assert(!sw.includes("pathname.includes('/assets/')"));
+  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-horror-r8-20261107'));assert(!sw.includes("pathname.includes('/assets/')"));
   const code=fs.readFileSync(path.join(root,'index.html'),'utf8');assert(code.includes('PLAY CO-OP'));assert(code.includes('facility-menu.js'));assert(html.includes('assets/facility-coop.js'));
 });
 
@@ -843,7 +955,7 @@ test('spider contact during invulnerability does not remove the encounter or rep
   const {ctx,A,F}=harness();A.facHauntInit(F);ctx.facSee=()=>true;let scares=0;ctx.facHauntSting=()=>{scares++;};
   const a=F.haunt.actors.find(a=>a.spider);Object.assign(a,{x:F.pl.x,y:F.pl.y,z:F.pl.z-.9,age:2,aware:true,chaseAt:0,lastSeen:2,reaction:0,life:28,contact:.19});F.haunt.active=a;F.pl.invulnUntil=F.t+1;
   A.facSpiderPursue(F,a,.05);assert(F.haunt.active===a,'An unsuccessful hit must not despawn the spider');assert.equal(scares,0);
-  F.t+=2;a.contact=.19;A.facSpiderPursue(F,a,.05);assert.equal(F.pl.hp,78);assert.equal(F.haunt.active,null);
+  F.t+=2;a.contact=.19;A.facSpiderPursue(F,a,.05);assert.equal(F.pl.hp,78);assert(F.haunt.active===a,'A successful bite must leave a dangerous living spider');assert(a.biteUntil>a.age);
 });
 
 test('hunter stops at attack range instead of running its body through the player camera',()=>{
