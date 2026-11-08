@@ -523,7 +523,7 @@ test('room parameters survive the game loader and asset updates invalidate old g
   const script=[...fs.readFileSync(path.join(root,'game.html'),'utf8').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)][0][1];
   vm.runInNewContext(script,{URL,location,document:{getElementById:()=>link}});const u=new URL(location.redirect);
   assert.equal(u.searchParams.get('room'),'ABC234');assert.equal(u.searchParams.get('coop'),'join');assert.equal(u.searchParams.get('name'),'Kai');assert.equal(u.searchParams.get('facility'),'1');
-  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-horror-r8-20261107'));assert(!sw.includes("pathname.includes('/assets/')"));
+  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-scope-r9-20261109'));assert(!sw.includes("pathname.includes('/assets/')"));
   const code=fs.readFileSync(path.join(root,'index.html'),'utf8');assert(code.includes('PLAY CO-OP'));assert(code.includes('facility-menu.js'));assert(html.includes('assets/facility-coop.js'));
 });
 
@@ -1000,4 +1000,29 @@ test('rendered hunter poses remain the correct physical size with normalized ski
     const mix=new T.AnimationMixer(gl.scene);mix.clipAction(gl.animations[0]).play();
     for(const t of [0,.1,.25,.4]){mix.setTime(t);const bounds=skinPoseBounds(T,gl.scene),size=bounds.getSize(new T.Vector3());assert(size.y>1.7&&size.y<2.2,'Rendered skin must stay within the hunter capsule height');assert(size.x<1.2&&size.z<2.2);assert(bounds.min.y>3.8&&bounds.max.y<6.2);}
   }
+});
+
+test('shipped modules share private engine state without relying on browser globals',()=>{
+  require('node:child_process').execFileSync(process.execPath,[path.join(root,'tools/build-facility.cjs'),'--check']);
+  const start='/* FACILITY PRIVATE MODULES START */',end='/* FACILITY PRIVATE MODULES END */',a=core.indexOf(start),b=core.indexOf(end,a);
+  assert(a>0&&b>a,'The shipped engine must contain the private modules');
+  for(const name of ['survival','world','coop'])assert(!html.includes('<script src="assets/facility-'+name+'.js'),'Do not execute a second global copy');
+  const isolated={THREE:T,console,performance,URLSearchParams,addEventListener(){},location:{search:''},document:{getElementById:()=>null},setTimeout,clearTimeout};isolated.window=isolated;vm.createContext(isolated);
+  vm.runInContext(`(()=>{
+    const HZ={dead:false,won:false},meta={flash:false},FAC={eye:1.62};
+    const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+    let screams=0;function hzScream(){screams++;}
+    function facTip(){}function facSting(){}function facHauntEnd(){}function hsClock(){return '';}
+    function facSee(){return true;}
+    const F={t:10,pl:{x:11,y:4,z:8,hp:100,invulnUntil:0,yaw:0,pitch:0},camY:5.62,dm:{x:11,y:4,z:8.7,on:true,st:'chase',g:new THREE.Group()},fuses:0};
+    const FDM={reach:.98};
+    ${core.slice(a+start.length,b)}
+    ${section('function facDmCatch(F,dt)','function facDmReveal(F,t)')}
+    ${section('function facDie(F)','function facDeadTick(F,dt)')}
+    globalThis.scopeTest={F,HZ,get screams(){return screams;},tick(){F.t+=.05;facDmCatch(F,.05);facScareView(F,.05);},explore(){facExploreApply(F,true);}};
+  })();`,isolated);
+  assert.equal(isolated.HZ,undefined,'Private state must stay private');assert.equal(isolated.facDamage,undefined);
+  const run=isolated.scopeTest;for(let i=0;i<200&&!run.HZ.dead;i++)run.tick();
+  assert.equal(run.F.pl.hp,0);assert(run.HZ.dead);assert.equal(run.F.dm.st,'kill');assert.equal(run.screams,4);
+  run.explore();assert.equal(run.F.dm.on,false);
 });

@@ -6,6 +6,10 @@ Play Survival to search three floors, collect one fuse per floor, power the brea
 
 ## This build
 
+The damage, co-op and outdoor modules now execute inside the engine closure. Previously, external scripts could not read private `HZ`, `meta`, `FAC`, sound or collision functions. Contact repeatedly threw `ReferenceError: HZ is not defined` before health changed, aborting the rest of the simulation/audio frame. The old test harness accidentally exposed those variables globally and missed this integration failure. A new isolated-scope test executes the shipped module block and real contact/death functions with no global engine state.
+
+After editing `assets/facility-survival.js`, `assets/facility-world.js` or `assets/facility-coop.js`, run `node tools/build-facility.cjs`. The generated block is committed inside `game-core.html`; tests enforce that it matches the source modules.
+
 - Cold launches initialize the shared noise buffer before creating Facility sound. Proximity radio, hunter breaths/steps and scare effects no longer depend on a prior UI sound. Pointer/touch input wakes suspended audio before control handlers consume the event.
 - Confirmed close contact plays the recorded scare and briefly turns the camera toward the attacker. Four sustained hunter hits still kill in Survival; co-op forwards each hit scare only to the struck player. The final hunter approach uses capsule movement inside the attack range instead of a rounded navigation stop point.
 - The spider stays active after biting, pauses briefly, then can attack again. Damage cooldowns, cover and sprint escape remain in effect. This fixes the former single-bite encounter whose damage always regenerated before another spider could appear.
@@ -84,10 +88,10 @@ The freight lift arrives 24 seconds after all three fuses are installed. Close d
 
 Deploy the repository to Vercel to serve the game and the Node.js function in `api/facility-room.js`. Solo play also works with a local static server, for example `python -m http.server 8000` and `http://localhost:8000/`. A static server alone cannot execute the multiplayer API.
 
-Run `node --test tests/facility-regression.test.cjs` (95 checks). Coverage includes source parsing, geometry, routes, physical door sweeps, native hospital frames/hinges, joystick and stamina behavior, uploaded creature rigs, pursuit/cover rules, health and revives, four-client hosted room packets, transient request recovery, late joins, API boundaries, extension/Backrooms reachability and native outdoor running animation, instanced door transforms/view culling, mobile render buffers/materials, static batching, AI cadence/sleeping, compact packets, empty-room snapshots and model-cache migration.
+Run `node --test tests/facility-regression.test.cjs` (96 checks). Coverage includes source parsing, geometry, routes, physical door sweeps, native hospital frames/hinges, joystick and stamina behavior, uploaded creature rigs, pursuit/cover rules, health and revives, four-client hosted room packets, transient request recovery, late joins, API boundaries, extension/Backrooms reachability and native outdoor running animation, instanced door transforms/view culling, mobile render buffers/materials, static batching, AI cadence/sleeping, compact packets, empty-room snapshots and model-cache migration.
 
 A real hosted-service test also connected four distinct clients, delivered shared world messages to all three guests and rejected a fifth. Browser rendering, actual touch controls and a simultaneous physical-device play session still need playtesting.
 
-The active build is `horror-r8-20261107`. Both entry HTML files and `game-core.html` load this build. The service worker bypasses `/api/` entirely and uses network-first caching for gameplay scripts. Attribution is in [CREDITS.md](CREDITS.md).
+The active build is `scope-r9-20261109`. Both entry HTML files and `game-core.html` load this build. The service worker bypasses `/api/` entirely and uses network-first caching for gameplay scripts. Attribution is in [CREDITS.md](CREDITS.md).
 
 Creature pose tests decode normalized integer skin weights exactly as the GPU does. The old r128 `boneTransform` CPU helper does not normalize those weights, so using it directly on the optimized hunter produces invalid 255-times bounds. The renderer already decodes them correctly.
