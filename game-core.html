@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>The Facility — Night Courtyard</title>
-<meta name="facility-build" content="movement-r10-20261109">
+<meta name="facility-build" content="contact-r11-20261109">
 <meta name="theme-color" content="#060807">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="mobile-web-app-capable" content="yes">
@@ -12791,7 +12791,7 @@ function audioWatch(){
   if(window.__awOn)return;window.__awOn=1;
   const all=()=>{const a=(window.__ACS||[]).slice();if(AC&&a.indexOf(AC)<0)a.push(AC);return a;};
   const sleep=()=>{for(const c of all())try{if(c.state==='running')c.suspend();}catch(_){}};
-  const wake=()=>{if(document.hidden)return;for(const c of all())try{if(c.state==='suspended')c.resume();}catch(_){}};
+  const wake=()=>{if(document.hidden)return;for(const c of all())try{if(c.state!=='running'&&c.state!=='closed')c.resume().catch(()=>{});}catch(_){}};
   document.addEventListener('visibilitychange',()=>{if(document.hidden)sleep();else wake();});
   addEventListener('pagehide',sleep);addEventListener('blur',sleep);
   document.addEventListener('freeze',sleep);document.addEventListener('resume',wake);
@@ -15775,7 +15775,7 @@ function facDemonInit(F){
 function facDmPlace(F,x,y,z,face){const dm=F.dm;dm.x=x;dm.y=y;dm.z=z;if(face!=null)dm.face=face;dm.path=null;dm.route=null;dm.repT=0;dm.waitDoor=null;dm.on=true;dm.g.visible=true;dm.leap=null;dm.bash=null;dm.safeUntil=F.t+2;dm.grabT=0;dm.alert=0;dm.sees=0;dm.lastVisual=-99;}
 function facDmState(F,st){const dm=F.dm;if(dm.st!==st){
   dm.prev=dm.st;dm.st=st;dm.stT=0;dm.path=null;dm.route=null;dm.repT=0;dm.grabT=0;dm.waitDoor=null;
-  if(st==='chase'){dm.safeUntil=Math.max(dm.safeUntil||0,F.t+1.2);dm.lastVisual=F.t;}
+  if(st==='chase')dm.lastVisual=F.t;
   if(st==='search'){dm.sp=null;dm.looks=0;if(dm.prev==='chase'){F.dir.recoverUntil=F.t+14;dm.alert=0;}}
   if(st==='prowl')dm.goalP=null;
 }}
@@ -15933,13 +15933,14 @@ function facDemonTick(F,dt){
   facDmCatch(F,dt);
 }
 function facDmCatch(F,dt){
-  const dm=F.dm;dm.contacts=dm.contacts||new Map();
+  const dm=F.dm;dm.grabT=0;
+  // A physical grab is lethal in Survival, including when the player walks
+  // into a stationary/revealing hunter. Hidden vents and spawn grace are safe.
+  if(F.explore||!dm.on||dm.st==='away'||dm.st==='vent'||dm.st==='kill'||F.t<(dm.safeUntil||0))return;
   for(const pl of facPlayers(F)){
-    const id=pl.netId||'local',contact=facAlive(pl)&&dm.on&&dm.st==='chase'&&F.t>=(dm.safeUntil||0)&&F.t>=(pl.invulnUntil||0)&&!HZ.dead&&!HZ.won&&
-      Math.hypot(pl.x-dm.x,pl.z-dm.z)<FDM.reach&&Math.abs(pl.y-dm.y)<.85&&facSee(F,dm.x,dm.y+1.35,dm.z,pl.x,pl.y+(pl.crouch?.9:1.35),pl.z,true);
-    if(!contact){dm.contacts.delete(id);if(pl===F.pl)dm.grabT=0;continue;}
-    const t=(dm.contacts.get(id)||0)+dt;dm.contacts.set(id,t);if(pl===F.pl)dm.grabT=t;
-    if(t>=.4){facDamage(F,pl,FHEALTH.hunter,dm);dm.contacts.delete(id);if(pl===F.pl)dm.grabT=0;}
+    if(!facAlive(pl)||Math.abs(pl.y-dm.y)>=.85||Math.hypot(pl.x-dm.x,pl.z-dm.z)>=FDM.reach)continue;
+    if(facSee(F,dm.x,dm.y+1.35,dm.z,pl.x,pl.y+(pl.crouch?.9:1.35),pl.z,true))facDamage(F,pl,FHEALTH.hunter,dm);
+    if(HZ.dead)break;
   }
 }
 function facDmReveal(F,t){const dm=F.dm;dm.on=true;dm.g.visible=true;dm.revT=Math.max(1.2,t||0);dm.mem={x:F.pl.x,y:F.pl.y,z:F.pl.z,t:F.t};facDmState(F,'reveal');facDmRoar(F,1);F.dir.lastChase=F.t;}
@@ -16012,6 +16013,11 @@ function facAudioInit(F){
   s3.connect(rb);rb.connect(ws);ws.connect(rg);rg.connect(A.out);s3.start();A.radio=rg;
   const sk=AC.createBufferSource();A.src.push(sk);sk.buffer=nbuf;sk.loop=true;A.spiderLP=AC.createBiquadFilter();A.spiderLP.type='bandpass';A.spiderLP.frequency.value=1600;A.spiderLP.Q.value=1.2;A.spider=AC.createGain();A.spider.gain.value=0;
   sk.connect(A.spiderLP);if(AC.createStereoPanner){A.spiderPan=AC.createStereoPanner();A.spiderLP.connect(A.spiderPan);A.spiderPan.connect(A.spider);}else A.spiderLP.connect(A.spider);A.spider.connect(A.out);sk.start();
+  // Persistent, pooled creature presence: audible even when it stands still.
+  A.presence=AC.createGain();A.presence.gain.value=0;A.presenceLP=AC.createBiquadFilter();A.presenceLP.type='lowpass';A.presenceLP.frequency.value=900;
+  const growl=AC.createBufferSource();growl.buffer=b;growl.loop=true;growl.connect(A.presenceLP);A.src.push(growl);growl.start();
+  const throat=AC.createOscillator(),throatGain=AC.createGain();throat.type='sawtooth';throat.frequency.value=145;throatGain.gain.value=.12;throat.connect(throatGain);throatGain.connect(A.presenceLP);A.src.push(throat);throat.start();
+  A.presenceLP.connect(A.presence);if(AC.createStereoPanner){A.presencePan=AC.createStereoPanner();A.presence.connect(A.presencePan);A.presencePan.connect(A.out);}else A.presence.connect(A.out);
   A.hb=0;A.br=0;A.ev=12;}catch(e){console.warn('fac audio',e);facAudioStop(F);}
 }
 function facAudioStop(F){const A=F.au;if(!A)return;for(const s of A.src||[])try{s.stop();}catch(_){}try{A.out.disconnect();}catch(_){}F.au=null;}
@@ -16067,7 +16073,8 @@ function facAudio(F,dt){
     facAudioTarget(A.amb.gain,HZ.paused?.01:(F.quietT>0?.012:.13),t,F.quietT>0?.25:1.2);
     facAudioTarget(A.duct.frequency,460+Math.sin(F.t*.13)*140,t,.5);
     let best=99;for(const l of F.reflL||[])best=Math.min(best,l.d);facAudioTarget(A.hum.gain,.022*clamp(1-best/4.5,0,1)*Math.min(1,pw*1.2),t,.3);
-    if(dm.on){const occ=!facSee(F,pl.x,F.camY,pl.z,dm.x,dm.y+1.6,dm.z,false);facAudioTarget(A.dOut.gain,Math.min(1.4,2.4/(1+d*.3)),t,.08);facAudioTarget(A.dLP.frequency,occ?(d<6?1400:650):14000,t,.12);
+    let hunterBlocked=false;
+    if(dm.on){const occ=hunterBlocked=!facSee(F,pl.x,F.camY,pl.z,dm.x,dm.y+1.6,dm.z,false);facAudioTarget(A.dOut.gain,Math.min(1.4,2.4/(1+d*.3)),t,.08);facAudioTarget(A.dLP.frequency,occ?(d<6?1400:650):14000,t,.12);
       if(A.dPan){const a=Math.atan2(dx,dz)-Math.atan2(-Math.sin(pl.yaw),-Math.cos(pl.yaw));facAudioTarget(A.dPan.pan,clamp(-Math.sin(a)*.85,-1,1),t,.06);}}
     else facAudioTarget(A.dOut.gain,0,t,.3);
     const rk=dm.on?Math.pow(clamp(1-d/22,0,1),1.4):0;facAudioTarget(A.radio.gain,rk*.09*(.6+.4*Math.random()),t,.1);
@@ -16080,6 +16087,19 @@ function facAudio(F,dt){
       }
     }
     facAudioTarget(A.spider.gain,skitter,t,.05);
+    let enemy=null,near=24;
+    if(!F.explore&&!HZ.dead)for(const actor of [dm,F.runner,F.haunt?.active]){
+      if(!actor?.on||actor.spider||actor===F.haunt?.active&&!actor.revealed)continue;
+      const distance=Math.hypot(actor.x-pl.x,actor.z-pl.z,(actor.y-pl.y)*2);
+      if(distance<near){near=distance;enemy=actor;}
+    }
+    let presence=0;
+    if(enemy){const blocked=enemy===dm?hunterBlocked:!facSee(F,pl.x,F.camY,pl.z,enemy.x,enemy.y+(enemy.eye||1.6),enemy.z,true);
+      presence=Math.pow(1-near/24,1.5)*(.42+.08*Math.sin(F.t*5))*(blocked?.3:1);
+      facAudioTarget(A.presenceLP.frequency,blocked?450:1100,t,.1);
+      if(A.presencePan){const angle=Math.atan2(enemy.x-pl.x,enemy.z-pl.z)-Math.atan2(-Math.sin(pl.yaw),-Math.cos(pl.yaw));facAudioTarget(A.presencePan.pan,clamp(-Math.sin(angle)*.85,-1,1),t,.06);}
+    }
+    facAudioTarget(A.presence.gain,presence,t,.08);
   }
   /* fear: how close it is and whether it is hunting you */
   const chase=dm.on&&(dm.st==='chase'||dm.st==='reveal'||dm.st==='drop'||dm.st==='stare');
@@ -16347,6 +16367,7 @@ function facHauntTick(F,dt){
       facSpiderPursue(F,a,dt);if(S.active!==a)return;
     }else{
       const level=Math.abs(a.y-pl.y)<.65,dist=Math.hypot(a.x-pl.x,a.z-pl.z,(a.y-pl.y)*2),line=facSee(F,pl.x,F.camY,pl.z,a.x,a.y+a.eye,a.z,false),visible=facOnScreen(F,a.x,a.y+a.eye,a.z)&&line;
+      if(level&&line&&dist<.98){facDamage(F,pl,FHEALTH.hunter,a);if(HZ.dead)return;}
       if(a.mode==='watch'){
         a.g.rotation.y=Math.atan2(pl.x-a.x,pl.z-a.z);if(visible)a.seen+=dt;
         else facHauntWalk(F,a,pl.x,pl.y,pl.z,1,dt);
@@ -20082,7 +20103,7 @@ setInterval(()=>{if(!ARM.prac)return;if(state==='title'||!pvpSel()){ARM.prac=fal
 /* FACILITY PRIVATE MODULES START */
 /* Source: assets/facility-survival.js */
 /* Shared survival rules. The room host owns health, damage and revives. */
-const FHEALTH={max:100,hunter:28,spider:22,invulnerable:1.4,regenDelay:12,regen:4,revive:40};
+const FHEALTH={max:100,hunter:100,spider:22,invulnerable:1.4,regenDelay:12,regen:4,revive:40};
 function facHealthInit(F){
   Object.assign(F.pl,{hp:100,downed:false,invulnUntil:0,lastHit:-99});
 }
@@ -20377,7 +20398,7 @@ function facHealthHud(F){
   }
   const dx=a.x-oldX,dz=a.z-oldZ;a.speed=Math.hypot(dx,dz)/Math.max(dt,.001);if(a.speed>.05)a.face=Math.atan2(dx,dz);
   a.g.position.set(a.x,a.y,a.z);a.g.rotation.y=a.face;if(a.g.visible)runnerAnimation(a,dt,a.speed);
-  for(const p of list){const close=F.t>=(a.reactUntil||0)&&Math.hypot(p.x-a.x,p.z-a.z)<.88&&facSee(F,a.x,5.5,a.z,p.x,p.y+1.2,p.z,true);p.runnerContact=close?(p.runnerContact||0)+dt:0;if(p.runnerContact>.3){facDamage(F,p,32);p.runnerContact=0;}}
+  for(const p of list)if(Math.abs(p.y-a.y)<.85&&Math.hypot(p.x-a.x,p.z-a.z)<.98&&facSee(F,a.x,a.y+1.5,a.z,p.x,p.y+1.2,p.z,true))facDamage(F,p,FHEALTH.hunter,a);
  }
  function tick(F,dt,authority){
   const S=F.world;if(!S)return;
@@ -20405,7 +20426,7 @@ function facHealthHud(F){
 /* Source: assets/facility-coop.js */
 /* Hosted HTTPS co-op. Only the host simulates the world.
    Guests send movement and interaction requests; snapshots own all shared state. */
-const FNET={version:2,build:'movement-r10',prefix:'facility-v1-',hz:12,max:4,timeout:25000};
+const FNET={version:2,build:'contact-r11',prefix:'facility-v1-',hz:12,max:4,timeout:25000};
 function facNetName(v){return String(v||'Survivor').replace(/[^\p{L}\p{N} _-]/gu,'').trim().slice(0,18)||'Survivor';}
 function facNetCode(v){return String(v||'').toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,6);}
 function facNetSend(conn,data,essential=false){
@@ -20801,14 +20822,14 @@ fixBar();buildTitleLevel();resize();requestAnimationFrame(frame);
   document.getElementById('ro-skip').addEventListener('click',dismiss);
 })();
 </script>
-<script src="assets/horror/spider.js?v=movement-r10-20261109"></script>
-<script src="assets/horror/ghost.js?v=movement-r10-20261109"></script>
-<script src="assets/horror/signs.js?v=movement-r10-20261109"></script>
-<link rel="stylesheet" href="assets/facility-survival.css?v=movement-r10">
-<link rel="stylesheet" href="assets/facility-map.css?v=movement-r10">
-<script src="assets/facility-map.js?v=movement-r10"></script>
-<script src="assets/facility-navigation.js?v=movement-r10"></script>
-<script src="assets/facility-relay.js?v=movement-r10"></script>
+<script src="assets/horror/spider.js?v=contact-r11-20261109"></script>
+<script src="assets/horror/ghost.js?v=contact-r11-20261109"></script>
+<script src="assets/horror/signs.js?v=contact-r11-20261109"></script>
+<link rel="stylesheet" href="assets/facility-survival.css?v=contact-r11">
+<link rel="stylesheet" href="assets/facility-map.css?v=contact-r11">
+<script src="assets/facility-map.js?v=contact-r11"></script>
+<script src="assets/facility-navigation.js?v=contact-r11"></script>
+<script src="assets/facility-relay.js?v=contact-r11"></script>
 <script id="facility-direct-entry">
 (function(){
   let tries=0,done=false;

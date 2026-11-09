@@ -195,7 +195,7 @@
   }
   const dx=a.x-oldX,dz=a.z-oldZ;a.speed=Math.hypot(dx,dz)/Math.max(dt,.001);if(a.speed>.05)a.face=Math.atan2(dx,dz);
   a.g.position.set(a.x,a.y,a.z);a.g.rotation.y=a.face;if(a.g.visible)runnerAnimation(a,dt,a.speed);
-  for(const p of list){const close=F.t>=(a.reactUntil||0)&&Math.hypot(p.x-a.x,p.z-a.z)<.88&&facSee(F,a.x,5.5,a.z,p.x,p.y+1.2,p.z,true);p.runnerContact=close?(p.runnerContact||0)+dt:0;if(p.runnerContact>.3){facDamage(F,p,32);p.runnerContact=0;}}
+  for(const p of list)if(Math.abs(p.y-a.y)<.85&&Math.hypot(p.x-a.x,p.z-a.z)<.98&&facSee(F,a.x,a.y+1.5,a.z,p.x,p.y+1.2,p.z,true))facDamage(F,p,FHEALTH.hunter,a);
  }
  function tick(F,dt,authority){
   const S=F.world;if(!S)return;

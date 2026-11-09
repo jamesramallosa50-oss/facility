@@ -73,7 +73,7 @@ function nativeDeath(h){
 test('a fresh launch creates proximity sound before any UI click or other sound effect',()=>{
   const {ctx,F}=audioHarness(harness());ctx.facAudioInit(F);
   assert(F.au,'Cold launch must not depend on a sound effect creating nbuf first');
-  assert.equal(ctx.audioContext.started.length,5);const original=F.au;ctx.facAudioInit(F);assert(F.au===original,'Audio init must be idempotent');
+  assert.equal(ctx.audioContext.started.length,7);const original=F.au;ctx.facAudioInit(F);assert(F.au===original,'Audio init must be idempotent');
   F.dm.on=true;F.dm.x=F.pl.x+2;F.dm.y=F.pl.y;F.dm.z=F.pl.z;ctx.facAudio(F,.1);
   assert(F.au.dOut.gain.target>1);assert(F.au.radio.gain.target>0);assert(F.pl.fear>0);
   const far=F.au.radio.gain.target;F.dm.x+=30;ctx.facAudio(F,.11);assert(F.au.radio.gain.target<far);
@@ -107,7 +107,7 @@ test('real hunter movement and vision reach lethal contact and run the death jum
   let nearest=99;
   for(let i=0;i<480&&!ctx.HZ.dead;i++){F.t+=1/60;ctx.audioContext.currentTime+=1/60;A.facDemonTick(F,1/60);ctx.facAudio(F,1/60);ctx.facScareView(F,1/60);nearest=Math.min(nearest,Math.hypot(F.dm.x-F.pl.x,F.dm.z-F.pl.z));}
   assert.equal(F.pl.hp,0);assert(ctx.HZ.dead);assert.equal(F.dm.st,'kill');assert(F.dm.g.visible);assert(nearest>=A.FDM.stop-.01);
-  assert.equal(ctx.audioContext.started.filter(s=>s.buffer?.duration===1.6).length,4,'Each hit must play once; the lethal hit must not double its voices');
+  assert.equal(ctx.audioContext.started.filter(s=>s.buffer?.duration===1.6).length,1,'The lethal grab must play one scream');
   ctx.facDeadTick(F,1/60);assert(F.deadT>0);assert(!F.hand.g.visible,'The death camera must show the creature');
 });
 
@@ -330,7 +330,7 @@ function hunter(){
 test('hunter recognition gives a warning and noise alone never starts a chase',()=>{
   const {ctx,A,F}=hunter();let warnings=0;ctx.facTip=()=>warnings++;
   for(let i=0;i<16;i++){F.t+=.05;A.facDemonTick(F,.05);}assert.equal(F.dm.st,'prowl');assert(warnings>=1);
-  for(let i=0;i<10;i++){F.t+=.05;A.facDemonTick(F,.05);}assert.equal(F.dm.st,'chase');assert(F.dm.safeUntil>F.t);
+  for(let i=0;i<10;i++){F.t+=.05;A.facDemonTick(F,.05);}assert.equal(F.dm.st,'chase');assert(!(F.dm.safeUntil>F.t),'Recognition must not add another contact immunity window');
   A.facDmState(F,'prowl');F.dm.alert=0;ctx.facDmSee=()=>0;ctx.facDmHear=()=>({x:12,y:4,z:3,r:80});
   for(let i=0;i<10;i++){F.t+=.05;A.facDemonTick(F,.05);}assert.equal(F.dm.st,'inv','Loud noises should trigger investigation');
 });
@@ -343,16 +343,19 @@ test('hunter loses visual tracking behind cover, maintains chase pressure, and r
   F.t+=4.1;A.facDemonTick(F,.05);assert.equal(F.dm.st,'search');assert(F.dir.recoverUntil>=F.t+14);
   const before=F.dm.alert;ctx.facDmSee=()=>1;F.t+=.1;A.facDemonTick(F,.05);assert(F.dm.alert<=before,'Recovery should stop an immediate repeat chase');
 });
-test('hunter attacks need sustained visible contact, deal health damage, and respect reaction time',()=>{
-  const {ctx,A,F}=hunter();F.dm.st='chase';F.dm.z=F.pl.z-.65;ctx.facSee=()=>false;
-  for(let i=0;i<20;i++)A.facDmCatch(F,.05);assert(!ctx.HZ.dead,'A closed door or wall must block a grab');
-  ctx.facSee=()=>true;F.dm.y=0;for(let i=0;i<20;i++)A.facDmCatch(F,.05);assert(!ctx.HZ.dead,'Another floor must block a grab');F.dm.y=F.pl.y;
-  F.dm.st='reveal';for(let i=0;i<20;i++)A.facDmCatch(F,.05);assert(!ctx.HZ.dead,'Reveals cannot kill');
-  F.dm.st='chase';F.dm.safeUntil=F.t+1.2;for(let i=0;i<20;i++)A.facDmCatch(F,.05);assert(!ctx.HZ.dead,'Reaction window must prevent a grab');F.dm.safeUntil=0;
-  for(let i=0;i<8;i++)A.facDmCatch(F,.05);assert(!ctx.HZ.dead,'Brief contact should be escapable');
-  F.dm.z-=1;A.facDmCatch(F,.05);assert.equal(F.dm.grabT,0);F.dm.z=F.pl.z-.65;
-  for(let i=0;i<11;i++)A.facDmCatch(F,.05);assert.equal(F.pl.hp,72,'Sustained contact should damage health');assert(!ctx.HZ.dead);
-  for(let i=0;i<30;i++)A.facDmCatch(F,.05);assert.equal(F.pl.hp,72,'One collision must not drain every health point');
+test('a hunter grab is immediate and lethal in every physical state but respects walls, floors and spawn protection',()=>{
+  for(const state of ['peek','withdraw','prowl','inv','search','reveal','stare','door','cross','chase']){
+    const {ctx,A,F}=hunter();Object.assign(F.dm,{st:state,x:F.pl.x,y:F.pl.y,z:F.pl.z-.65,safeUntil:0});
+    ctx.facSee=()=>false;A.facDmCatch(F,1/60);assert.equal(F.pl.hp,100,'A wall must block contact');
+    ctx.facSee=()=>true;F.dm.y-=4;A.facDmCatch(F,1/60);assert.equal(F.pl.hp,100,'Another floor must block contact');F.dm.y=F.pl.y;
+    F.dm.safeUntil=F.t+2;A.facDmCatch(F,1/60);assert.equal(F.pl.hp,100,'Placement grace must prevent teleport kills');F.dm.safeUntil=0;
+    A.facDmCatch(F,1/60);assert.equal(F.pl.hp,0,state+' must not be harmless at touching distance');assert(ctx.HZ.dead);
+  }
+});
+test('a hunter grab downs the touched co-op guest without killing a distant teammate',()=>{
+  const {ctx,A,F}=hunter(),guest={...F.pl,netId:'guest',hp:100};F.coop={host:true,players:new Map([['guest',guest]])};
+  Object.assign(F.dm,{st:'reveal',x:guest.x,y:guest.y,z:guest.z-.7,safeUntil:0});F.pl.x+=8;ctx.facSee=()=>true;
+  A.facDmCatch(F,1/60);assert.equal(guest.hp,0);assert(guest.downed);assert.equal(F.pl.hp,100);assert(!ctx.HZ.dead);assert(guest.attack);
 });
 test('final alarm targets the breaker rather than a hidden player',()=>{
   const {ctx,A,F}=hunter();F.dir.final=true;F.dm.st='prowl';F.dm.stT=0;ctx.facOnScreen=()=>true;F.dir.ambT=1000;
@@ -362,7 +365,7 @@ test('the real closed door leaf blocks a grab and opening it restores line of si
   const {ctx,A,F}=hunter();F.dm.st='chase';F.dm.x=48.93;F.dm.z=21.75;F.pl.x=49.57;F.pl.z=21.75;
   const door={hx:49.25,hz:21.02,y:4,w:1.46,a0:Math.PI/2,th:0,tgt:0};F.doors=[door];
   for(let i=0;i<15;i++)A.facDmCatch(F,.05);assert(!ctx.HZ.dead);assert.equal(F.dm.grabT,0);
-  door.th=-Math.PI/2;for(let i=0;i<11;i++)A.facDmCatch(F,.05);assert.equal(F.pl.hp,72,'Opening the door should restore visible physical contact');assert(!ctx.HZ.dead);
+  door.th=-Math.PI/2;for(let i=0;i<11;i++)A.facDmCatch(F,.05);assert.equal(F.pl.hp,0,'Opening the door should restore lethal physical contact');assert(ctx.HZ.dead);
 });
 test('the opening grace period prevents detection and director ambushes',()=>{
   const {ctx,A,F}=hunter();F.dir.graceUntil=F.t+35;F.dir.alertAt=F.t;F.dir.ambT=0;F.dm.stT=0;
@@ -523,7 +526,7 @@ test('room parameters survive the game loader and asset updates invalidate old g
   const script=[...fs.readFileSync(path.join(root,'game.html'),'utf8').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)][0][1];
   vm.runInNewContext(script,{URL,location,document:{getElementById:()=>link}});const u=new URL(location.redirect);
   assert.equal(u.searchParams.get('room'),'ABC234');assert.equal(u.searchParams.get('coop'),'join');assert.equal(u.searchParams.get('name'),'Kai');assert.equal(u.searchParams.get('facility'),'1');
-  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-movement-r10-20261109'));assert(!sw.includes("pathname.includes('/assets/')"));
+  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-contact-r11-20261109'));assert(!sw.includes("pathname.includes('/assets/')"));
   const code=fs.readFileSync(path.join(root,'index.html'),'utf8');assert(code.includes('PLAY CO-OP'));assert(code.includes('facility-menu.js'));assert(html.includes('assets/facility-coop.js'));
 });
 
@@ -1023,7 +1026,7 @@ test('shipped modules share private engine state without relying on browser glob
   })();`,isolated);
   assert.equal(isolated.HZ,undefined,'Private state must stay private');assert.equal(isolated.facDamage,undefined);
   const run=isolated.scopeTest;for(let i=0;i<200&&!run.HZ.dead;i++)run.tick();
-  assert.equal(run.F.pl.hp,0);assert(run.HZ.dead);assert.equal(run.F.dm.st,'kill');assert.equal(run.screams,4);
+  assert.equal(run.F.pl.hp,0);assert(run.HZ.dead);assert.equal(run.F.dm.st,'kill');assert.equal(run.screams,1);
   run.explore();assert.equal(run.F.dm.on,false);
 });
 
@@ -1053,7 +1056,30 @@ test('shipped world tick reaches camera updates during keyboard and touch moveme
   // Exercise the same private helpers for reveal, pursuit, contact and cover.
   Object.assign(F.pl,{x:36,y:4,z:70});Object.assign(F.runner,{x:36,y:4,z:69.5,mode:'patrol',lastSeen:-99});
   ctx.facSee=()=>true;ctx.hzScream=()=>{};ctx.facHauntWalk=()=>{};
-  for(let i=0;i<100;i++)ctx.frameUnderTest(.05);
+  for(let i=0;i<100&&!ctx.HZ.dead;i++)ctx.frameUnderTest(.05);
   assert(F.pl.hp<100,'The private runner must still deal damage');
   ctx.window.FacilityWorld.dispose(F);
+});
+
+
+test('stationary hunters, outdoor runners and ghosts have pooled distance-based proximity sound',()=>{
+  for(const kind of ['hunter','runner','ghost']){
+    const {ctx,F}=audioHarness(harness());ctx.facSee=()=>true;ctx.facAudioInit(F);
+    const actor={x:F.pl.x+2,y:F.pl.y,z:F.pl.z,on:true,revealed:true,eye:1.6};
+    if(kind==='hunter')Object.assign(F.dm,actor);else if(kind==='runner')F.runner=actor;else F.haunt={active:actor};
+    ctx.facAudio(F,.11);const near=F.au.presence.gain.target;assert(near>.2,kind+' must be audible without footsteps');
+    const moving=kind==='hunter'?F.dm:actor;moving.x=F.pl.x+15;ctx.facAudio(F,.11);assert(F.au.presence.gain.target<near);
+    moving.x=F.pl.x+2;ctx.facSee=()=>false;ctx.facAudio(F,.11);assert(F.au.presence.gain.target<near*.5,'Cover must muffle growls');
+    moving.on=false;ctx.facAudio(F,.11);assert.equal(F.au.presence.gain.target,0);
+    moving.on=true;F.explore=true;ctx.facAudio(F,.11);assert.equal(F.au.presence.gain.target,0,'Explore stays silent');
+    const sources=F.au.src;ctx.facAudioStop(F);assert(sources.every(s=>s.stopped));
+  }
+});
+test('audio resumes interrupted phone contexts from a captured player gesture',()=>{
+  const h=audioHarness(harness()),{ctx}=h,events=new Map();
+  ctx.document.addEventListener=(name,fn)=>events.set(name,fn);ctx.addEventListener=(name,fn)=>events.set(name,fn);
+  vm.runInContext(section('function audioWatch()','/* 2. The old engine'),ctx);ctx.audioWatch();
+  ctx.audioContext.state='interrupted';events.get('touchstart')();assert.equal(ctx.audioContext.state,'running');
+  ctx.audioContext.state='suspended';events.get('keydown')();assert.equal(ctx.audioContext.state,'running');
+  ctx.document.hidden=true;ctx.audioContext.state='suspended';events.get('touchstart')();assert.equal(ctx.audioContext.state,'suspended');
 });

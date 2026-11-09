@@ -1,5 +1,5 @@
 /* Shared survival rules. The room host owns health, damage and revives. */
-const FHEALTH={max:100,hunter:28,spider:22,invulnerable:1.4,regenDelay:12,regen:4,revive:40};
+const FHEALTH={max:100,hunter:100,spider:22,invulnerable:1.4,regenDelay:12,regen:4,revive:40};
 function facHealthInit(F){
   Object.assign(F.pl,{hp:100,downed:false,invulnUntil:0,lastHit:-99});
 }

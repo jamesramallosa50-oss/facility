@@ -99,3 +99,9 @@ Creature pose tests decode normalized integer skin weights exactly as the GPU do
 ### Movement freeze correction (movement-r10)
 
 The courtyard runner now resolves movement, perception, health and audio helpers inside the engine closure. Its former `window.facPlayers` call threw on every Survival frame, including indoors, before the camera update. A regression executes the shipped private modules and the real Facility tick with no engine helpers on `window`; keyboard and touch movement both reach the camera, and runner contact still damages health.
+
+### Immediate monster grabs and proximity audio (contact-r11)
+
+Physical hunter grabs now trigger a lethal hit in every visible state, including patrol and reveal, instead of waiting for chase plus a contact timer. Solo grabs play one immediate scream and start the death sequence; co-op victims go down for teammate revival. Actual walls, other floors, placement grace, revival invulnerability and Explore immunity still block attacks. The courtyard runner and close ghost contact use the same lethal rule. Spider bites retain health damage.
+
+Stationary hunters, runners and ghosts have a pooled, spatial proximity growl that rises with distance, muffles behind cover, and shuts down with the encounter. Its sources are allocated once and disposed with the level. Captured touch/key gestures also resume interrupted mobile audio contexts.
