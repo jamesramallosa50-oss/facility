@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>The Facility — Night Courtyard</title>
-<meta name="facility-build" content="scope-r9-20261109">
+<meta name="facility-build" content="movement-r10-20261109">
 <meta name="theme-color" content="#060807">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="mobile-web-app-capable" content="yes">
@@ -20183,6 +20183,7 @@ function facHealthHud(F){
 /* The Facility: native uploaded environments, physical hospital doors, and a
    connected night courtyard. All static colliders derive from the same meshes. */
 (function(global){
+ // Engine helpers are lexical: this module is embedded inside the core IIFE.
  'use strict';const T=global.THREE,assets=new Map(),clamp=(x,a,b)=>Math.max(a,Math.min(b,x));let pending;
  const settings={garage:{scale:1.35,floor:.006395},store:{scale:.9,floor:.033886},office:{scale:1.1,floor:.02576},backroom:{scale:.95,floor:-.336001}};
  const placements=[{name:'garage',x:12,y:4.025,z:57},{name:'store',x:12,y:4.025,z:73},{name:'office',x:13,y:4.025,z:89},{name:'backroom',x:97,y:4.025,z:68}];
@@ -20360,23 +20361,23 @@ function facHealthHud(F){
   a.g.position.set(a.x,a.y,a.z);a.g.rotation.y=a.face;
  }
  function runnerTick(F,dt){
-  const a=F.runner;if(!a)return;a.age+=dt;const list=global.facPlayers(F).filter(p=>global.facAlive(p)&&enemyOutside(p));let target=null,best=Infinity;
+  const a=F.runner;if(!a)return;a.age+=dt;const list=facPlayers(F).filter(p=>facAlive(p)&&enemyOutside(p));let target=null,best=Infinity;
   if(!list.length){a.speed=0;a.mode='patrol';a.target=null;a.senseAt=0;a.route=null;a.path=null;a.repath=0;return;}
   if(F.t>=(a.senseAt||0)||a.target&&!list.includes(a.target)){
    a.senseAt=F.t+.1;
-   for(const p of list){const d=Math.hypot(p.x-a.x,p.z-a.z);if(d<34&&d<best&&global.facSee(F,a.x,a.y+1.6,a.z,p.x,p.y+1.3,p.z,true)){target=p;best=d;}}a.target=target;
+   for(const p of list){const d=Math.hypot(p.x-a.x,p.z-a.z);if(d<34&&d<best&&facSee(F,a.x,a.y+1.6,a.z,p.x,p.y+1.3,p.z,true)){target=p;best=d;}}a.target=target;
   }else target=a.target;
-  if(target){a.lastSeen=F.t;const memory=a.memory||(a.memory={});memory.x=target.x;memory.y=target.y;memory.z=target.z;if(a.mode!=='chase'){a.mode='chase';a.reactUntil=F.t+1;global.facTip(F,'Something is running toward you. Use the road and the lights.',3);global.facPS(F,a.x,a.y+1.4,a.z,o=>{global.sfxN(o,.45,.15,700,'bandpass');global.sfxT(o,84,35,.6,'sawtooth',.1);},1);}}
+  if(target){a.lastSeen=F.t;const memory=a.memory||(a.memory={});memory.x=target.x;memory.y=target.y;memory.z=target.z;if(a.mode!=='chase'){a.mode='chase';a.reactUntil=F.t+1;facTip(F,'Something is running toward you. Use the road and the lights.',3);facPS(F,a.x,a.y+1.4,a.z,o=>{sfxN(o,.45,.15,700,'bandpass');sfxT(o,84,35,.6,'sawtooth',.1);},1);}}
   else if(F.t-a.lastSeen>6)a.mode='patrol';
   const oldX=a.x,oldZ=a.z;
-  if(a.mode==='chase'&&F.t>=(a.reactUntil||0)&&a.memory)global.facHauntWalk(F,a,a.memory.x,a.memory.y,a.memory.z,5.05,dt);
+  if(a.mode==='chase'&&F.t>=(a.reactUntil||0)&&a.memory)facHauntWalk(F,a,a.memory.x,a.memory.y,a.memory.z,5.05,dt);
   else if(a.mode==='patrol'){
    if(!a.goal||Math.hypot(a.x-a.goal[0],a.z-a.goal[1])<1)a.goal=[[25,62],[36,72],[53,88],[27,94]][Math.floor(a.age/6)%4];
-   global.facHauntWalk(F,a,a.goal[0],4,a.goal[1],2.15,dt);
+   facHauntWalk(F,a,a.goal[0],4,a.goal[1],2.15,dt);
   }
   const dx=a.x-oldX,dz=a.z-oldZ;a.speed=Math.hypot(dx,dz)/Math.max(dt,.001);if(a.speed>.05)a.face=Math.atan2(dx,dz);
   a.g.position.set(a.x,a.y,a.z);a.g.rotation.y=a.face;if(a.g.visible)runnerAnimation(a,dt,a.speed);
-  for(const p of list){const close=F.t>=(a.reactUntil||0)&&Math.hypot(p.x-a.x,p.z-a.z)<.88&&global.facSee(F,a.x,5.5,a.z,p.x,p.y+1.2,p.z,true);p.runnerContact=close?(p.runnerContact||0)+dt:0;if(p.runnerContact>.3){global.facDamage(F,p,32);p.runnerContact=0;}}
+  for(const p of list){const close=F.t>=(a.reactUntil||0)&&Math.hypot(p.x-a.x,p.z-a.z)<.88&&facSee(F,a.x,5.5,a.z,p.x,p.y+1.2,p.z,true);p.runnerContact=close?(p.runnerContact||0)+dt:0;if(p.runnerContact>.3){facDamage(F,p,32);p.runnerContact=0;}}
  }
  function tick(F,dt,authority){
   const S=F.world;if(!S)return;
@@ -20393,7 +20394,7 @@ function facHealthHud(F){
   S.lights.forEach((l,i)=>{const p=lamps[i];l.intensity=p&&p.d<12?1.8*k:0;if(p)l.position.set(p.p.x,8.5,p.p.z);});
   if(F.runner&&!F.explore){const a=F.runner,d=Math.hypot(a.x-F.pl.x,a.z-F.pl.z);a.g.visible=d<45&&Math.abs(a.y-F.pl.y)<3;
    if(authority)runnerTick(F,dt);a.g.position.set(a.x,a.y,a.z);a.g.rotation.y=a.face;
-   if(enemyOutside(F.pl)&&d<18){if(F.t>=(a.fearAt||0)){a.fearAt=F.t+.1;a.fearVisible=global.facSee(F,F.pl.x,F.pl.y+1.4,F.pl.z,a.x,a.y+1.5,a.z,true);}if(a.fearVisible)F.pl.fear=Math.max(F.pl.fear||0,(1-d/18)*.85);}
+   if(enemyOutside(F.pl)&&d<18){if(F.t>=(a.fearAt||0)){a.fearAt=F.t+.1;a.fearVisible=facSee(F,F.pl.x,F.pl.y+1.4,F.pl.z,a.x,a.y+1.5,a.z,true);}if(a.fearVisible)F.pl.fear=Math.max(F.pl.fear||0,(1-d/18)*.85);}
   }
  }
  function releaseRunner(a){if(!a)return;a.mix.stopAllAction();if(a.cfg.visual.parent)a.cfg.visual.parent.remove(a.cfg.visual);a.cfg.owner=null;}
@@ -20404,7 +20405,7 @@ function facHealthHud(F){
 /* Source: assets/facility-coop.js */
 /* Hosted HTTPS co-op. Only the host simulates the world.
    Guests send movement and interaction requests; snapshots own all shared state. */
-const FNET={version:2,build:'scope-r9',prefix:'facility-v1-',hz:12,max:4,timeout:25000};
+const FNET={version:2,build:'movement-r10',prefix:'facility-v1-',hz:12,max:4,timeout:25000};
 function facNetName(v){return String(v||'Survivor').replace(/[^\p{L}\p{N} _-]/gu,'').trim().slice(0,18)||'Survivor';}
 function facNetCode(v){return String(v||'').toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,6);}
 function facNetSend(conn,data,essential=false){
@@ -20800,14 +20801,14 @@ fixBar();buildTitleLevel();resize();requestAnimationFrame(frame);
   document.getElementById('ro-skip').addEventListener('click',dismiss);
 })();
 </script>
-<script src="assets/horror/spider.js?v=scope-r9-20261109"></script>
-<script src="assets/horror/ghost.js?v=scope-r9-20261109"></script>
-<script src="assets/horror/signs.js?v=scope-r9-20261109"></script>
-<link rel="stylesheet" href="assets/facility-survival.css?v=scope-r9">
-<link rel="stylesheet" href="assets/facility-map.css?v=scope-r9">
-<script src="assets/facility-map.js?v=scope-r9"></script>
-<script src="assets/facility-navigation.js?v=scope-r9"></script>
-<script src="assets/facility-relay.js?v=scope-r9"></script>
+<script src="assets/horror/spider.js?v=movement-r10-20261109"></script>
+<script src="assets/horror/ghost.js?v=movement-r10-20261109"></script>
+<script src="assets/horror/signs.js?v=movement-r10-20261109"></script>
+<link rel="stylesheet" href="assets/facility-survival.css?v=movement-r10">
+<link rel="stylesheet" href="assets/facility-map.css?v=movement-r10">
+<script src="assets/facility-map.js?v=movement-r10"></script>
+<script src="assets/facility-navigation.js?v=movement-r10"></script>
+<script src="assets/facility-relay.js?v=movement-r10"></script>
 <script id="facility-direct-entry">
 (function(){
   let tries=0,done=false;

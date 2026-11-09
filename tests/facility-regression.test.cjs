@@ -523,7 +523,7 @@ test('room parameters survive the game loader and asset updates invalidate old g
   const script=[...fs.readFileSync(path.join(root,'game.html'),'utf8').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)][0][1];
   vm.runInNewContext(script,{URL,location,document:{getElementById:()=>link}});const u=new URL(location.redirect);
   assert.equal(u.searchParams.get('room'),'ABC234');assert.equal(u.searchParams.get('coop'),'join');assert.equal(u.searchParams.get('name'),'Kai');assert.equal(u.searchParams.get('facility'),'1');
-  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-scope-r9-20261109'));assert(!sw.includes("pathname.includes('/assets/')"));
+  const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');assert(sw.includes('facility-movement-r10-20261109'));assert(!sw.includes("pathname.includes('/assets/')"));
   const code=fs.readFileSync(path.join(root,'index.html'),'utf8');assert(code.includes('PLAY CO-OP'));assert(code.includes('facility-menu.js'));assert(html.includes('assets/facility-coop.js'));
 });
 
@@ -589,8 +589,8 @@ test('hosted rooms connect four clients, relay snapshots, recover a dropped requ
 });
 
 let worldPromise;
-async function worldHarness(){
-  if(worldPromise)return worldPromise;
+async function worldHarness(fresh=false){
+  if(worldPromise&&!fresh)return worldPromise;
   return worldPromise=(async()=>{
     const h=harness(),{ctx,A,F}=h;vm.runInContext(fs.readFileSync(path.join(root,'assets/facility-world.js'),'utf8'),ctx);
     for(const name of ['hospital-door','outdoor-runner','backroom','garage','store','office']){const gl=await parseSpider(T,path.join(root,'assets/world',name+'.glb'),path.join(root,'assets/horror/gltf.js'));ctx.FacilityWorld.prepare(name,gl);}
@@ -1025,4 +1025,35 @@ test('shipped modules share private engine state without relying on browser glob
   const run=isolated.scopeTest;for(let i=0;i<200&&!run.HZ.dead;i++)run.tick();
   assert.equal(run.F.pl.hp,0);assert(run.HZ.dead);assert.equal(run.F.dm.st,'kill');assert.equal(run.screams,4);
   run.explore();assert.equal(run.F.dm.on,false);
+});
+
+test('shipped world tick reaches camera updates during keyboard and touch movement with a live runner',async()=>{
+  const {ctx,A,F,W}=await worldHarness(true);
+  F.explore=false;F.coop=null;ctx.FacilityWorld.init(F);
+  assert(F.runner,'Test the outdoor enemy even while the player is indoors');
+  // Browser window has no engine-private helpers. The old global VM harness
+  // incorrectly made global.facPlayers (and the rest) available to this module.
+  ctx.window={THREE:T,FacilityNavigation:ctx.FacilityNavigation};
+  Object.assign(ctx,{testF:F,facSize(){},facCam(F){ctx.cameraPosition=[F.pl.x,F.pl.y,F.pl.z];ctx.cameraFrames++;},cameraFrames:0,
+    facAudio(){},facHud(){},facDemonTick(){},facDirector(){},facItems(){},facHauntTick(){},facHealthTick(){}});
+  ctx.HZ={fac:F,pl:F.pl,loading:false,paused:false,dead:false,won:false};F.vents=[];
+  const start='/* FACILITY PRIVATE MODULES START */',end='/* FACILITY PRIVATE MODULES END */';
+  vm.runInContext('(()=>{'+core.slice(core.indexOf(start)+start.length,core.indexOf(end))+'\n'+section('function facTick(dt)','function facRender()')+'\nglobalThis.frameUnderTest=facTick;})();',ctx);
+  assert.equal(ctx.window.facPlayers,undefined);assert.equal(ctx.window.facHauntWalk,undefined);
+  const reset=()=>{Object.assign(F.pl,{x:W.start.x,y:4,z:W.start.z,yaw:W.start.yaw,pitch:0,vx:0,vz:0,vy:0,ground:true,downed:false,hp:100,sta:1,bat:1,bob:0,bobA:0});F.t=20;};
+  for(const input of ['keyboard','touch']){
+    reset();ctx.keys.KeyW=input==='keyboard';ctx.touchMove.y=input==='touch'?-1:0;
+    const from=[F.pl.x,F.pl.z],frames=ctx.cameraFrames;
+    for(let i=0;i<30;i++)ctx.frameUnderTest(1/60);
+    assert(Math.hypot(F.pl.x-from[0],F.pl.z-from[1])>.5,input+' must move the capsule from spawn');
+    assert.equal(ctx.cameraFrames-frames,30,'Every movement frame must reach the camera');
+    assert.deepEqual(ctx.cameraPosition,[F.pl.x,F.pl.y,F.pl.z]);
+  }
+  ctx.keys.KeyW=false;ctx.touchMove.y=0;
+  // Exercise the same private helpers for reveal, pursuit, contact and cover.
+  Object.assign(F.pl,{x:36,y:4,z:70});Object.assign(F.runner,{x:36,y:4,z:69.5,mode:'patrol',lastSeen:-99});
+  ctx.facSee=()=>true;ctx.hzScream=()=>{};ctx.facHauntWalk=()=>{};
+  for(let i=0;i<100;i++)ctx.frameUnderTest(.05);
+  assert(F.pl.hp<100,'The private runner must still deal damage');
+  ctx.window.FacilityWorld.dispose(F);
 });

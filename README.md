@@ -95,3 +95,7 @@ A real hosted-service test also connected four distinct clients, delivered share
 The active build is `scope-r9-20261109`. Both entry HTML files and `game-core.html` load this build. The service worker bypasses `/api/` entirely and uses network-first caching for gameplay scripts. Attribution is in [CREDITS.md](CREDITS.md).
 
 Creature pose tests decode normalized integer skin weights exactly as the GPU does. The old r128 `boneTransform` CPU helper does not normalize those weights, so using it directly on the optimized hunter produces invalid 255-times bounds. The renderer already decodes them correctly.
+
+### Movement freeze correction (movement-r10)
+
+The courtyard runner now resolves movement, perception, health and audio helpers inside the engine closure. Its former `window.facPlayers` call threw on every Survival frame, including indoors, before the camera update. A regression executes the shipped private modules and the real Facility tick with no engine helpers on `window`; keyboard and touch movement both reach the camera, and runner contact still damages health.
